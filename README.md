@@ -5,6 +5,16 @@ Powernate - Automatic Hibernate Mapping to Sybase Powerdesigner Physical Data Mo
 
 Powernate is a useful tool for Sybase Powerdesigner users who are developing Hibernate projects.  
 
-Create your Powerdesigner Physical Data Model (PDM) instantly from your Hibernate project with few clicks.
+Create (or update) your Powerdesigner Physical Data Model (PDM) instantly from your existing Hibernate project with few clicks.
 
 Powernate also features a full automatic generator of entity relationship diagrams, allowing the user to export the best visual arrangement of the model to Powerdesigner.
+
+How it works
+------------
+
+See **simpledemoapp** for a demonstration.
+
+1. Build and add *powernate* JAR in your project classpath;
+2. Create a configuration class extending *marcos2250.powernate.util.Config* and supply the required parameters;
+3. Execute class **VisualPowernate**'s main method and follow instructions.
+
