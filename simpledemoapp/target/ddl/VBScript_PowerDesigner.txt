@@ -1,0 +1,474 @@
+'VBScript for Powerdesigner
+'--------------------------
+option explicit
+
+dim numberOfRows, defaultUserName, defaultUserGroupName, defaultEtlGroupName 
+dim defaultTableSpace
+
+ActiveModel.GetModelOptions.RebuildAutomaticallyTrigger = false
+
+
+'Auxiliary Methods
+'-----------------
+
+function existsObject(object)
+     if isNull(object) or isEmpty(object) then
+          existsObject = false
+          exit function
+     end if
+
+     if object Is Nothing then
+          existsObject = false
+          exit function
+     end if
+
+     if isObject(object) then
+          existsObject = true
+          exit function
+     end if
+
+     existsObject = false
+end function
+
+function objectShouldBeCommented(object, objectName)
+ if existsObject(object) then
+  if object.Comment = "" then
+   'output "INFO: Object to be commented: " & objectName
+   objectShouldBeCommented = true
+  else
+   'output "INFO: Object has already been commented: " & objectName
+   objectShouldBeCommented = false 
+  end if  
+ else
+  'output "INFO: Object not found: " & objectName
+  objectShouldBeCommented = false
+ end if 
+end function
+
+'bubble sort an ObjectCol collection alphabetically
+sub sortObjectCol(collection)
+     dim a, j
+     if collection.Count > 1 then
+          for a = (collection.Count - 2) to 0 step - 1
+               for j = 0 To a
+                    if collection.Item(j).Name > collection.Item(j + 1).Name then
+                         collection.Move j, j + 1
+                    end If
+               next
+          next
+     end if
+end sub
+
+'bubble sort an ObjectCol collection chronologically
+sub sortObjectColByTime(collection)
+     dim a, j, twoDaysAgo
+     twoDaysAgo = Date - 2
+     if collection.Count > 1 then
+          for a = (collection.Count - 2) to 0 step - 1
+               for j = 0 To a
+                    if collection.Item(j).CreationDate > twoDaysAgo and _
+                       collection.Item(j).CreationDate > collection.Item(j + 1).CreationDate then
+                           collection.Move j, j + 1
+                    end if
+               next
+          next
+     end if
+end sub
+
+function findReference(parentTable, childTable, childColumn)
+  dim ir, i, j
+  for i = 0 to ActiveModel.References.Count - 1
+     set ir = ActiveModel.References.Item(i)
+     if ir.ParentTable = parentTable and ir.ChildTable = childTable then
+       for j = 0 to ir.Joins.Count - 1
+         if existsObject(ir.Joins.Item(j).ChildTableColumn) then
+           if ir.Joins.Item(j).ChildTableColumn = childColumn then
+             set findReference = ir
+             exit function
+           end if
+         else
+           output "WARNING: Reference " & ir.Name & " does not have any ChildTableColumn set!"
+         end if
+       next
+     end if
+  next
+  set findReference = nothing
+end function
+
+function objectHasPermissionForGroup(object, groupName)
+  dim i
+  for i = 0 to object.Permissions.Count - 1
+     if not object.Permissions.Item(i).LinkedObject is nothing then
+       if object.Permissions.Item(i).LinkedObject.Name = groupName then
+          objectHasPermissionForGroup = true
+          exit function
+       end if
+     end if
+  next
+  objectHasPermissionForGroup = false
+end function
+
+sub createPermissionGroupInTable(table, groupName, operationsToGrant)
+  dim group, permissionGroup
+  set group = ActiveModel.FindChildByName(groupName, PdPDM.cls_Group)
+  if existsObject(group) then
+    'output "INFO: Adding group permission '" & groupName & "' for table " & table.Name
+    set permissionGroup = table.Permissions.CreateNew()
+    permissionGroup.LinkedObject = group
+    permissionGroup.Grant = operationsToGrant
+  else
+    output "ERROR: Group '" & groupName & "' does not exist!"
+    exit sub
+  end if   
+end sub
+
+function findFkByName(fkName)
+     dim fk, table, column, i, j
+     for i = 0 to ActiveModel.Tables.Count - 1
+          set table = ActiveModel.Tables.Item(i)
+          for j = 0 to table.Indexes.Count -1
+               set fk = table.Indexes.Item(j)
+               if fk.Name = fkName then
+                    set findFkByName = fk
+                    exit function
+               end if
+          next
+     next
+     set findFkByName = Nothing
+end function
+
+function findFkForTable(childTable, ir, fkName)
+     dim fk, i
+     for i = 0 to childTable.Indexes.count - 1
+          set fk = childTable.Indexes.Item(i)
+          if existsObject(fk.LinkedObject) then
+               if fk.LinkedObject.Name = ir.Name then
+                    set findFkForTable = fk
+                    exit function
+               end if
+          else
+               if fk.Name = fkName then
+                    set findFkForTable = fk
+                    exit function
+               end if
+          end if
+     next
+     set findFkForTable = nothing
+end function
+
+function isTableAssociatedToATablespace(tableName)
+     dim i, j, tablespace
+     for i = 0 to ActiveModel.Tablespaces.count - 1
+          set tablespace = ActiveModel.Tablespaces.item(i)
+          for j = 0 to tablespace.objects.count - 1
+              if tablespace.objects.item(j).Name = tableName then
+                   isTableAssociatedToATablespace = true
+                   exit function
+              end if
+          next
+     next
+     isTableAssociatedToATablespace = false
+end function
+
+sub createOrUpdateFK(fkName, ir, childTable, fkComment, fkUniqueConstraint)
+     dim fk, i
+     set fk = findFkForTable(childTable, ir, fkName)
+
+     if not existsObject(fk) then
+          if existsObject(findFkByName(fkName)) then  
+               output "ERROR: Cannot create FK " & fkName & " because it already exists in another table!"
+               exit sub
+          end if
+
+          'output "INFO: Creating FK " & fkName
+          set fk = childTable.Indexes.CreateNew()
+     end if
+
+     fk.SetNameAndCode fkName, fkName
+     fk.LinkedObject = ir
+     fk.Comment = fkComment
+     fk.Unique = fkUniqueConstraint
+
+     if fk.Name <> fkName then
+         output "WARNING: The FK " & fkName & " has a wrong name. Actual is " & fk.Name  & ", when it should be " & fkName
+     end if
+
+     'Sort FK list
+     sortObjectCol childTable.Indexes
+end sub
+
+function isPermissionDuplicated(object, name)
+dim count, j
+    count = 0
+    for j = 0 to object.Permissions.Count - 1
+        if name = object.Permissions.Item(j).LinkedObject.Name then
+         count = count + 1
+        end if
+        if count > 1 then
+            isPermissionDuplicated = true
+            exit function
+        end if
+    next
+    isPermissionDuplicated = false
+end function
+
+sub removeDuplicatedPermissions(object, name)
+  dim id, j
+  id = -1
+  do while isPermissionDuplicated(object, name)
+      for j = 0 to object.Permissions.Count - 1
+          if name = object.Permissions.Item(j).LinkedObject.Name then
+             id = j
+          end if
+      next
+      if id > 0 then
+         output "INFO: Removing duplicated permission " & name & " in " & object & " id " & id
+         object.Permissions.RemoveAt id
+      end if
+  loop
+end sub
+
+
+'Main Operations
+'---------------
+
+sub grantPermissionGroupForSequence(sequence, groupName)
+     dim group, newPermission
+     set group = ActiveModel.FindChildByName(groupName, PdPDM.cls_Group)
+     if not existsObject(group) then
+          exit sub
+     end if
+     if not objectHasPermissionForGroup(sequence, groupName) then
+          set newPermission = sequence.Permissions.CreateNew()
+          newPermission.LinkedObject = group
+          newPermission.Grant = "USAGE ON SEQUENCE,ALTER ON SEQUENCE"
+     end if
+end sub
+
+
+
+sub setTableProperties(tableName, comment, tableColor)
+  dim table, tablespace
+  set table = ActiveModel.FindChildByName(tableName, cls_Table)
+  if objectShouldBeCommented(table, tableName) then 
+    table.Comment = comment
+  end if
+  if existsObject(table) then
+    if table.Number = empty then
+       table.Number = numberOfRows
+    end if
+    if not isTableAssociatedToATablespace(tableName) then
+       set tablespace = ActiveModel.FindChildByName(defaultTableSpace, cls_Tablespace)
+       if existsObject(tablespace) then
+            tablespace.objects.add table
+            table.setPhysicalOptionValue "in/<tablespace>", defaultTableSpace
+       else
+            output "ERROR: Tablespace not found: " & defaultTableSpace
+       end if
+    end if
+    if tableColor <> 0 then
+      dim i
+      for i = 0 to table.Symbols.Count - 1
+        table.Symbols.Item(i).FillColor = tableColor
+        table.Symbols.Item(i).LineColor = tableColor
+      next
+    end if
+  end if
+end sub
+
+sub setTablePosition(tableName, x, y)
+  dim table
+  set table = ActiveModel.FindChildByName(tableName, cls_Table)
+  if existsObject(table) then
+       dim i
+       for i = 0 to table.Symbols.Count - 1
+         table.Symbols.Item(i).Position.X = x
+         table.Symbols.Item(i).Position.Y = y
+       next
+  end if
+end sub
+
+sub setColumnProperties(tableName, columnName, comment, sequenceName, suggestedDefaultValue, isMandatory)
+  dim table
+  set table = ActiveModel.FindChildByName(tableName, cls_Table)
+  if existsObject(table) then
+    dim column
+    set column = table.FindChildByName(columnName, cls_Column)
+    if objectShouldBeCommented(column, columnName) then
+      column.Comment = comment
+    end if
+    if existsObject(column) then
+       if sequenceName <> empty and not existsObject(column.Sequence) then 
+         dim sequence
+         set sequence = ActiveModel.FindChildByName(sequenceName, cls_Sequence)
+         if existsObject(sequence) then
+              column.Sequence = sequence
+         else
+              output "WARNING: Sequence " & sequenceName & " does not exist!"
+         end if
+       end if
+       if not column.Primary then
+            column.Mandatory = isMandatory
+       end if
+       if suggestedDefaultValue <> empty _
+          and dateValue(column.ModificationDate) = date() _
+          and dateValue(column.CreationDate) > dateValue(table.CreationDate) _
+          and column.Mandatory _
+          and not column.Primary _
+          and column.DefaultValue = empty then
+            column.WithDefault = true
+            column.DefaultValue = suggestedDefaultValue
+       end if
+    end if 
+  end if
+end sub 
+
+sub createRelation(parentTableName, childTableName, childColumnName, irName, fkName, fkUniqueConstraint, irComment, fkComment) 
+     dim parentTable, childTable, childColumn
+ 
+     set parentTable = ActiveModel.FindChildByName(parentTableName, cls_Table)
+     set childTable = ActiveModel.FindChildByName(childTableName, cls_Table)  
+     if not existsObject(parentTable) or not existsObject(childTable) then
+          output "ERROR: The IR " & irName & " cannot be created, since either (or both) the parent or child tables do not exist!"
+          exit sub
+     end if
+
+     set childColumn = childTable.FindChildByName(childColumnName, cls_Column) 
+     if not existsObject(childColumn) then
+          output "ERROR: The IR " & irName & " cannot be created. The column " & childColumnName & " does not exist in the table " & childTableName
+          exit sub
+     end if
+
+     'Create the IR
+     dim ir
+     set ir = findReference(parentTable, childTable, childColumn)
+     if not existsObject(ir)  then
+          'output "INFO: Creating IR: " + irName
+          set ir = ActiveModel.References.CreateNew()
+          ir.SetNameAndCode irName, irName
+          ir.ParentTable = parentTable
+          ir.ChildTable = childTable
+          ir.Joins.Item(0).ChildTableColumn = childColumn
+          ir.Comment = irComment
+          if ir.Name <> irName then
+               if existsObject(ActiveModel.FindChildByName(irName, cls_Reference)) then
+                    output "WARNING: The IR name " & irName & " was auto-renamed to " & ir.Name & " and another " & irName & " already exists!"
+               else
+                    ir.Name = irName
+                    ir.Code = irName
+                    ir.foreignKeyConstraintName = irName
+               end if
+          end if
+     end if
+
+     'Create the FK
+     createOrUpdateFK fkName, ir, childTable, fkComment, fkUniqueConstraint
+
+end sub
+
+
+sub grantGroupPermissionForTable(tableName, groupName, operationsToGrant)
+     dim table
+     set table = ActiveModel.FindChildByName(tableName, cls_Table)
+     if not existsObject(table) then
+          exit sub
+     end if
+     if not objectHasPermissionForGroup(table, groupName) then
+          createPermissionGroupInTable table, groupName, operationsToGrant
+     end if
+end sub
+
+
+sub createSequence(sequenceName)
+     dim sequence, user, newPermission
+     set sequence = ActiveModel.FindChildByName(sequenceName, PdPDM.cls_Sequence)
+     if not existsObject(sequence) then
+          set sequence = ActiveModel.Sequences.CreateNew()
+          sequence.SetNameAndCode sequenceName, sequenceName
+     end if
+     set user = ActiveModel.FindChildByName(defaultUserName, PdPDM.cls_User)
+     sequence.Owner = user
+     grantPermissionGroupForSequence sequence, defaultUserGroupName
+     grantPermissionGroupForSequence sequence, defaultEtlGroupName
+     sequence.PhysicalOptions = "increment by 1 start with 1 maxvalue 2147483647 minvalue 1 no cycle cache 20 no order"
+end sub
+
+
+sub doPostProcessings()
+     dim i, j, table, sequence, reference
+
+     'Post process tables
+     for i = 0 to ActiveModel.Tables.Count - 1
+          set table = ActiveModel.Tables.Item(i)
+
+          'Sort columns by creation time
+          sortObjectColByTime(table.Columns)
+
+          removeDuplicatedPermissions table, defaultUserGroupName
+          removeDuplicatedPermissions table, defaultEtlGroupName
+     next
+
+     'Sequences
+     for i = 0 to ActiveModel.Sequences.Count - 1
+          set sequence = ActiveModel.Sequences.Item(i)
+          removeDuplicatedPermissions sequence, defaultUserGroupName
+          removeDuplicatedPermissions sequence, defaultEtlGroupName
+     next
+
+     'References
+     for i = 0 to ActiveModel.References.Count - 1
+          set reference = ActiveModel.References.Item(i)
+          for j = 0 to reference.Symbols.Count - 1
+               reference.Symbols.Item(j).LineColor = 0
+          next
+     next
+end sub
+
+'Default project properties
+'--------------------------
+defaultUserName = "APP"
+defaultUserGroupName = "GAPPDW"
+defaultEtlGroupName = "GETLDW"
+defaultTableSpace = "TSBJR4"
+numberOfRows = "70000"
+
+'Table properties for: PER_PERSON
+setTableProperties "PER_PERSON", "/NOME: Person."+ vbcrlf +"/FUNÇÃO: Guardar instâncias de Person geradas pela aplicação."+ vbcrlf +"/EXEMPLOS: Ver exemplos nos campos."+ vbcrlf +"/FONTE: Dados informados pelo usuário e gerados pelo sistema.", 0
+setColumnProperties "PER_PERSON", "PER_ST_FIRST_NAME", "/NOME: Per st first name."+ vbcrlf +"/FUNÇÃO: Guardar Per st first name de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
+setColumnProperties "PER_PERSON", "PER_DT_BIRTH", "/NOME: Per dt birth."+ vbcrlf +"/FUNÇÃO: Guardar Per dt birth de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
+setColumnProperties "PER_PERSON", "PER_ST_LAST_NAME", "/NOME: Per st last name."+ vbcrlf +"/FUNÇÃO: Guardar Per st last name de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
+setColumnProperties "PER_PERSON", "PER_ID", "/NOME: Per id."+ vbcrlf +"/FUNÇÃO: Guardar Per id de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "0", true
+setColumnProperties "PER_PERSON", "PER_NM_CELLPHONE", "/NOME: Per nm cellphone."+ vbcrlf +"/FUNÇÃO: Guardar Per nm cellphone de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
+grantGroupPermissionForTable "PER_PERSON", "GAPPDW", "DELETE,INSERT,SELECT,UPDATE"
+grantGroupPermissionForTable "PER_PERSON", "GAPPDR", "SELECT"
+
+'Table properties for: PAR_PARTICIPANTS
+
+'Relationship for: PER_PERSON to PAR_PARTICIPANTS
+createRelation "PER_PERSON", "PAR_PARTICIPANTS", "PER_ID", "IRPERPAR", "FKPARPER", false, "Integridade referencial entre a tabela mãe PER_PERSON  e a coluna PER_ID da tabela filha PAR_PARTICIPANTS", "Chave estrangeira entre a tabela mãe PER_PERSON e a tabela filha PAR_PARTICIPANTS"
+
+
+'Relationship for: PRJ_PROJECT to PAR_PARTICIPANTS
+createRelation "PRJ_PROJECT", "PAR_PARTICIPANTS", "PRJ_ID", "IRPRJPAR", "FKPARPRJ", false, "Integridade referencial entre a tabela mãe PRJ_PROJECT  e a coluna PRJ_ID da tabela filha PAR_PARTICIPANTS", "Chave estrangeira entre a tabela mãe PRJ_PROJECT e a tabela filha PAR_PARTICIPANTS"
+
+setTableProperties "PAR_PARTICIPANTS", "/NOME: Par Participants."+ vbcrlf +"/FUNÇÃO: Guardar instâncias de Par Participants geradas pela aplicação."+ vbcrlf +"/EXEMPLOS: Ver exemplos nos campos."+ vbcrlf +"/FONTE: Dados informados pelo usuário e gerados pelo sistema.", 0
+setColumnProperties "PAR_PARTICIPANTS", "PRJ_ID", "/NOME: Prj id."+ vbcrlf +"/FUNÇÃO: Guardar Prj id de Par participants."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "0", true
+setColumnProperties "PAR_PARTICIPANTS", "PER_ID", "/NOME: Per id."+ vbcrlf +"/FUNÇÃO: Guardar Per id de Par participants."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "0", true
+grantGroupPermissionForTable "PAR_PARTICIPANTS", "GAPPDW", "DELETE,INSERT,SELECT,UPDATE"
+grantGroupPermissionForTable "PAR_PARTICIPANTS", "GAPPDR", "SELECT"
+
+'Table properties for: PRJ_PROJECT
+setTableProperties "PRJ_PROJECT", "/NOME: Project."+ vbcrlf +"/FUNÇÃO: Guardar instâncias de Project geradas pela aplicação."+ vbcrlf +"/EXEMPLOS: Ver exemplos nos campos."+ vbcrlf +"/FONTE: Dados informados pelo usuário e gerados pelo sistema.", 0
+setColumnProperties "PRJ_PROJECT", "PER_ST_NAME", "/NOME: Per st name."+ vbcrlf +"/FUNÇÃO: Guardar Per st name de Prj project."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
+setColumnProperties "PRJ_PROJECT", "PER_DT_END", "/NOME: Per dt end."+ vbcrlf +"/FUNÇÃO: Guardar Per dt end de Prj project."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
+setColumnProperties "PRJ_PROJECT", "PRJ_ID", "/NOME: Prj id."+ vbcrlf +"/FUNÇÃO: Guardar Prj id de Prj project."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "0", true
+setColumnProperties "PRJ_PROJECT", "PER_DT_BEGIN", "/NOME: Per dt begin."+ vbcrlf +"/FUNÇÃO: Guardar Per dt begin de Prj project."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
+setColumnProperties "PRJ_PROJECT", "PER_ST_STATUS", "/NOME: Per st status."+ vbcrlf +"/FUNÇÃO: Guardar Per st status de Prj project."+ vbcrlf +"/DOMÍNIO: 0 : ACTIVE | 1 : INACTIVE | "+ vbcrlf +"/FONTE: Enumeration ProjectStatus da aplicação", "", "", false
+grantGroupPermissionForTable "PRJ_PROJECT", "GAPPDW", "DELETE,INSERT,SELECT,UPDATE"
+grantGroupPermissionForTable "PRJ_PROJECT", "GAPPDR", "SELECT"
+doPostProcessings
+
+'Rearranging table graph positions
+setTablePosition "PAR_PARTICIPANTS", 503912.24548810197, 701825.70267043
+setTablePosition "PER_PERSON", 520000.0, 662212.2998169878
+setTablePosition "PRJ_PROJECT", 461562.15503072494, 707699.9999999994
