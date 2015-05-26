@@ -7,26 +7,23 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.tool.hbm2ddl.DatabaseMetadata;
 
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 
 public class CorretorDeScriptDDL {
 
     public static final String ERRO_AO_GERAR_O_SCRIPT_DDL = "Erro ao gerar o script DDL.";
 
-    private ConectorHibernate conectorHibernate;
     private RefinadorResultadoDDL refinadorResultadoDDL;
     private Configuration hibernateConfig;
     private boolean gerarApenasUpdates;
     private Valentrim valentrim;
 
-    private Config config;
+    private PowernateSessionMediator config;
 
-    public CorretorDeScriptDDL(Config config, ConectorHibernate conectorHibernate,
-            RefinadorResultadoDDL refinadorResultadoDDL) {
+    public CorretorDeScriptDDL(PowernateSessionMediator config, RefinadorResultadoDDL refinadorResultadoDDL) {
         this.config = config;
-        this.conectorHibernate = conectorHibernate;
         this.refinadorResultadoDDL = refinadorResultadoDDL;
-        hibernateConfig = conectorHibernate.getConfiguration();
+        hibernateConfig = config.getConfiguration();
     }
 
     public Collection<String> corrigir() {
@@ -40,7 +37,6 @@ public class CorretorDeScriptDDL {
 
     public void processarHibernateMetadata() {
         try {
-            conectorHibernate.getSessionFactoryBean();
             valentrim = new Valentrim(hibernateConfig, config);
             valentrim.process();
             // CHECKSTYLE:OFF
@@ -56,7 +52,7 @@ public class CorretorDeScriptDDL {
 
             if (gerarApenasUpdates) {
                 return hibernateConfig.generateSchemaUpdateScript(dialect, //
-                        new DatabaseMetadata(conectorHibernate.getConnection(), dialect));
+                        new DatabaseMetadata(config.getConnection(), dialect));
             } else {
 
                 return hibernateConfig.generateSchemaCreationScript(dialect);

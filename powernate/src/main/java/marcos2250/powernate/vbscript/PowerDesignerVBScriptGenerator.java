@@ -14,7 +14,7 @@ import javax.persistence.SequenceGenerator;
 import marcos2250.powernate.comment.CommentBuilder;
 import marcos2250.powernate.graph.GraphGenerator;
 import marcos2250.powernate.graph.Node;
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.util.DDLUtils;
 import marcos2250.powernate.valentrim.Quirks;
 
@@ -57,11 +57,11 @@ public class PowerDesignerVBScriptGenerator {
 
     private StringBuffer buffer;
 
-    private Config config;
+    private PowernateSessionMediator config;
 
     private Quirks quirks;
 
-    public PowerDesignerVBScriptGenerator(Config config, Quirks quirks, Multimap<Table, PersistentClass> tableToClass,
+    public PowerDesignerVBScriptGenerator(PowernateSessionMediator config, Quirks quirks, Multimap<Table, PersistentClass> tableToClass,
             Multimap<String, Property> columnAliasToProperty) {
 
         this.config = config;

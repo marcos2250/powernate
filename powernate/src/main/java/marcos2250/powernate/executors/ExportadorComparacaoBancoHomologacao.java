@@ -2,7 +2,7 @@ package marcos2250.powernate.executors;
 
 import java.util.Collection;
 
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.valentrim.CorretorDeScriptDDL;
 import marcos2250.powernate.valentrim.FileMaker;
 import marcos2250.powernate.valentrim.GrepDDL;
@@ -11,7 +11,7 @@ import marcos2250.powernate.window.JanelaNotificavel;
 public class ExportadorComparacaoBancoHomologacao implements AbstractExecutor {
 
     @Override
-    public void executar(JanelaNotificavel janela, Config config) {
+    public void executar(JanelaNotificavel janela, PowernateSessionMediator config) {
 
         if (config == null || config.getCorretorDeScriptDDL() == null) {
             return;

@@ -4,15 +4,15 @@ import static org.apache.commons.lang.StringUtils.EMPTY;
 
 import com.google.common.base.Function;
 
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 
 public class SequencePermissionsFunction implements Function<String, String> {
 
     private static final int SEQUENCE_NAME_INDEX = 2;
 
-    private Config config;
+    private PowernateSessionMediator config;
 
-    public SequencePermissionsFunction(Config config) {
+    public SequencePermissionsFunction(PowernateSessionMediator config) {
         this.config = config;
     }
 

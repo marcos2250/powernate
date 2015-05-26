@@ -1,18 +1,17 @@
 package marcos2250.powernate.executors;
 
-import marcos2250.powernate.util.Config;
-import marcos2250.powernate.valentrim.ConectorHibernate;
+import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.valentrim.CorretorDeScriptDDL;
 import marcos2250.powernate.valentrim.RefinadorResultadoDDL;
 import marcos2250.powernate.window.JanelaNotificavel;
 
 public class ImportadorHibernateMetadata implements AbstractExecutor {
 
-    public void executar(JanelaNotificavel janela, Config config) {
+    public void executar(JanelaNotificavel janela, PowernateSessionMediator config) {
 
         janela.notificar("Carregando Hibernate...");
 
-        ConectorHibernate conectorHibernate = new ConectorHibernate(config);
+        config.initialize();
 
         janela.notificar("Refinando resultado DDL...");
 
@@ -20,8 +19,7 @@ public class ImportadorHibernateMetadata implements AbstractExecutor {
 
         janela.notificar("Corrigindo resultado DDL...");
 
-        CorretorDeScriptDDL corretorDeScriptDDL = new CorretorDeScriptDDL(config, conectorHibernate,
-                refinadorResultadoDDL);
+        CorretorDeScriptDDL corretorDeScriptDDL = new CorretorDeScriptDDL(config, refinadorResultadoDDL);
 
         janela.notificar("Processando metadados do Hibernate...");
 

@@ -1,6 +1,6 @@
 package marcos2250.powernate.executors;
 
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.valentrim.CorretorDeScriptDDL;
 import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
 import marcos2250.powernate.window.JanelaNotificavel;
@@ -8,7 +8,7 @@ import marcos2250.powernate.window.JanelaNotificavel;
 public class GeradorGrafos implements AbstractExecutor {
 
     @Override
-    public void executar(JanelaNotificavel janela, Config config) {
+    public void executar(JanelaNotificavel janela, PowernateSessionMediator config) {
 
         if (config == null) {
             return;

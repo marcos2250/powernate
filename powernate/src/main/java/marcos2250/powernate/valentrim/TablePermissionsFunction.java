@@ -4,7 +4,7 @@ import static org.apache.commons.lang.StringUtils.EMPTY;
 
 import com.google.common.base.Function;
 
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 
 /**
  * Cria permissoes padrao de READ ou WRITE correspondentes a cada tabela
@@ -27,9 +27,9 @@ public class TablePermissionsFunction implements Function<String, String> {
 
     private Permission permission;
 
-    private Config config;
+    private PowernateSessionMediator config;
 
-    public TablePermissionsFunction(Config config, Permission pemission) {
+    public TablePermissionsFunction(PowernateSessionMediator config, Permission pemission) {
         this.config = config;
         this.permission = pemission;
     }

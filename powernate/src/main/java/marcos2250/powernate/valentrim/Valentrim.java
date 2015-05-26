@@ -15,7 +15,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.util.DDLUtils;
 import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
 
@@ -69,11 +69,11 @@ public class Valentrim {
 
     private PowerDesignerVBScriptGenerator geradorVBScript;
 
-    private Config config;
+    private PowernateSessionMediator config;
 
     private Quirks quirks;
 
-    public Valentrim(Configuration hibernateConfiguration, Config config) {
+    public Valentrim(Configuration hibernateConfiguration, PowernateSessionMediator config) {
         this.hibernateConfiguration = hibernateConfiguration;
         this.config = config;
     }

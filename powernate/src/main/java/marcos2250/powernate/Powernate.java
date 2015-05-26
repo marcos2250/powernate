@@ -2,8 +2,7 @@ package marcos2250.powernate;
 
 import marcos2250.powernate.executors.ExportadorDDLVisual;
 import marcos2250.powernate.executors.ImportadorHibernateMetadata;
-import marcos2250.powernate.util.ClassloaderUtil;
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.window.JanelaNotificavel;
 
 import org.apache.commons.lang.time.DurationFormatUtils;
@@ -11,30 +10,21 @@ import org.apache.commons.lang.time.DurationFormatUtils;
 public class Powernate {
 
     public static void main(String[] args) {
-
-        if (args == null || args.length == 0) {
-            return;
-        }
-
-        Config config = ClassloaderUtil.getInstanceFromClasspath(args[0]);
-
-        if (config == null) {
-            return;
-        }
-
-        iniciar(config);
+        iniciar();
     }
 
-    public static void iniciar(Config config) {
+    public static void iniciar() {
 
         long tempoInicio = System.currentTimeMillis();
-        
+
         JanelaNotificavel console = new JanelaNotificavel() {
             @Override
             public void notificar(String arg0) {
                 System.out.println(arg0);
             }
         };
+
+        PowernateSessionMediator config = new PowernateSessionMediator();
 
         new ImportadorHibernateMetadata().executar(console, config);
 
@@ -46,7 +36,7 @@ public class Powernate {
         long tempoFim = System.currentTimeMillis();
         console.notificar("DDL Exporter finished by " + formataDuracao(tempoFim - tempoInicio));
     }
-    
+
     public static String formataDuracao(long milis) {
         return DurationFormatUtils.formatDuration(milis, "H'h' m'min' s's'");
     }

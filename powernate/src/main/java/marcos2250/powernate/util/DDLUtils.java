@@ -8,7 +8,7 @@ import org.hibernate.mapping.Table;
 public class DDLUtils {
 
     @SuppressWarnings("unchecked")
-    public static boolean isEnvers(Table table, Config config) {
+    public static boolean isEnvers(Table table, PowernateSessionMediator config) {
         if (table.getPrimaryKey() == null) {
             return false;
         }

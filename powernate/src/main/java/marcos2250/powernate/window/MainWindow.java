@@ -24,9 +24,7 @@ import marcos2250.powernate.executors.ExportadorComparacaoBancoHomologacao;
 import marcos2250.powernate.executors.ExportadorDDLVisual;
 import marcos2250.powernate.executors.GeradorGrafos;
 import marcos2250.powernate.executors.ImportadorHibernateMetadata;
-import marcos2250.powernate.util.ClassloaderUtil;
-import marcos2250.powernate.util.Config;
-import marcos2250.powernate.util.Util;
+import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
 
 public class MainWindow extends JFrame implements ActionListener, JanelaNotificavel {
@@ -47,7 +45,7 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
 
     private JDesktopPane desktop;
 
-    private Config config;
+    private PowernateSessionMediator config;
 
     private ModelWindow modelWindow;
 
@@ -203,7 +201,7 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
 
     private void importarModelo() {
         if (!busy) {
-            dialogoCarregarConfiguracao();
+            config = new PowernateSessionMediator();
             executorSelecionado = new ImportadorHibernateMetadata();
             processamentoParalelo();
         }
@@ -231,38 +229,9 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
         }
     }
 
-    private void dialogoCarregarConfiguracao() {
-        Object[] configurations = Util.lerConfigurations();
-
-        String classeConfig;
-
-        if (configurations == null || configurations.length == 0) {
-
-            classeConfig = (String) JOptionPane.showInputDialog(desktop, //
-                    "Digite o Qualified Name de uma classe que herda de Config do Powernate:", //
-                    "Configuracao do modelo", //
-                    JOptionPane.PLAIN_MESSAGE);
-
-        } else {
-
-            classeConfig = (String) JOptionPane.showInputDialog(desktop, //
-                    "Selecione a configuracao a ser importada:", //
-                    "Configuracao do modelo", //
-                    JOptionPane.PLAIN_MESSAGE, //
-                    null, //
-                    configurations, configurations[0]);
-
-        }
-
-        if (classeConfig != null) {
-            config = ClassloaderUtil.getInstanceFromClasspath(classeConfig);
-        }
-
-    }
-
     private void dialogoExportarDiagrama() {
 
-        if (!config.isChangedGraph()) {
+        if (!busy && config != null && !config.isChangedGraph()) {
             return;
         }
 
@@ -328,11 +297,11 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
         System.exit(0);
     }
 
-    public Config getConfig() {
+    public PowernateSessionMediator getConfig() {
         return config;
     }
 
-    public void setConfig(Config config) {
+    public void setConfig(PowernateSessionMediator config) {
         this.config = config;
     }
 

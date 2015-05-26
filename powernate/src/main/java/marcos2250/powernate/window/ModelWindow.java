@@ -16,7 +16,7 @@ import javax.swing.JPanel;
 
 import marcos2250.powernate.graph.Node;
 import marcos2250.powernate.graph.RelationalNode;
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
 
 public class ModelWindow extends JInternalFrame {
@@ -330,7 +330,7 @@ public class ModelWindow extends JInternalFrame {
         return mainWindow.getModeler();
     }
 
-    private Config getConfig() {
+    private PowernateSessionMediator getConfig() {
         return mainWindow.getConfig();
     }
 

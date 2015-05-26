@@ -5,7 +5,7 @@ import java.util.Map;
 import org.hibernate.mapping.Property;
 import org.hibernate.mapping.Table;
 
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 
 public class CommentBuilder {
 
@@ -22,7 +22,7 @@ public class CommentBuilder {
 
     private Map<Class<?>, ColumnCommentAppender> columnTypeToCommentAppender;
 
-    public CommentBuilder(Config config) {
+    public CommentBuilder(PowernateSessionMediator config) {
         this.columnTypeToCommentAppender = config.getColumnTypeToCommentAppender();
     }
 

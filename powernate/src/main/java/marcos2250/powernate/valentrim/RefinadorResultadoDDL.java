@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 
-import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.PowernateSessionMediator;
 
 public class RefinadorResultadoDDL {
 
@@ -25,21 +25,21 @@ public class RefinadorResultadoDDL {
 
     private static final String CREATE_INDEX_PATTERN = "^((create)( unique)? index)(.*)";
 
-    private final Config config;
+    private final PowernateSessionMediator config;
 
-    public RefinadorResultadoDDL(Config config) {
+    public RefinadorResultadoDDL(PowernateSessionMediator config) {
         this.config = config;
     }
 
-    private String getCreateTablePattern(Config config) {
+    private String getCreateTablePattern(PowernateSessionMediator config) {
         return "^(" + config.getDialect().getCreateTableString() + ")(.*)";
     }
 
-    private String getCreateSequencePattern(Config config) {
+    private String getCreateSequencePattern(PowernateSessionMediator config) {
         return "^(" + config.getCreateSequenceString(EMPTY) + ")(.*)";
     }
 
-    private Function<String, String> getTableSpaceNameTransformation(final Config config) {
+    private Function<String, String> getTableSpaceNameTransformation(final PowernateSessionMediator config) {
         return new Function<String, String>() {
             public String apply(String input) {
                 String result = input;
@@ -51,7 +51,7 @@ public class RefinadorResultadoDDL {
         };
     }
 
-    private Function<String, String> getSequenceOptionsTransformation(final Config config) {
+    private Function<String, String> getSequenceOptionsTransformation(final PowernateSessionMediator config) {
         return new Function<String, String>() {
             public String apply(String input) {
                 String result = input;
@@ -80,7 +80,7 @@ public class RefinadorResultadoDDL {
         }
     };
 
-    public Collection<String> refinar(Config config, String[] argScript) {
+    public Collection<String> refinar(PowernateSessionMediator config, String[] argScript) {
         List<String> script = newArrayList(argScript);
 
         List<String> scriptProcessado = newArrayList(//
