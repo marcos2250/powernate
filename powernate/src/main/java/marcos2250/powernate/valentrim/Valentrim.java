@@ -8,11 +8,16 @@ import static com.google.common.collect.Sets.newHashSet;
 import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.DDLUtils;
+import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
 
 import org.apache.commons.lang.StringUtils;
 import org.hibernate.cfg.Configuration;
@@ -36,19 +41,18 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
 
-import marcos2250.powernate.util.Config;
-import marcos2250.powernate.util.DDLUtils;
-import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
-
 //CHECKSTYLE:OFF devido Fan-out excessivo
 @SuppressWarnings({"PMD.ExcessiveImports", "PMD.CouplingBetweenObjects", "PMD.FanOut"})
 public class Valentrim {
     // CHECKSTYLE:ON
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(Valentrim.class);
+
     private static final String UNCHECKED = "unchecked";
     private static final String UNDERSCORE = "_";
 
     private static final String FK = "FK";
+    private static final String PREFIXO_UK = "UK_";
     private static final int PREFIX_LENGTH = 3;
     private static final int COLUMN_NAME_MAX_LENGTH = 32;
     private static final int TABLE_NAME_MAX_LENGTH = 40;
@@ -67,7 +71,7 @@ public class Valentrim {
 
     private Config config;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Valentrim.class);
+    private Quirks quirks;
 
     public Valentrim(Configuration hibernateConfiguration, Config config) {
         this.hibernateConfiguration = hibernateConfiguration;
@@ -78,7 +82,7 @@ public class Valentrim {
         init();
         checkTablePrefixesUniqueness();
 
-        geradorVBScript = new PowerDesignerVBScriptGenerator(config, tableToClass, columnAliasToProperty);
+        geradorVBScript = new PowerDesignerVBScriptGenerator(config, quirks, tableToClass, columnAliasToProperty);
 
         geradorVBScript.doPreProcessings(tables);
 
@@ -98,34 +102,32 @@ public class Valentrim {
 
     }
 
-    private void processSequences(Table table) {
-        geradorVBScript.createSequence(table);
-    }
-
-    private void processComments(Table table) {
-        geradorVBScript.processTableProperties(table);
-    }
-
-    @SuppressWarnings(UNCHECKED)
     private void init() {
         hibernateConfiguration.setNamingStrategy(DefaultNamingStrategy.INSTANCE);
-
         hibernateConfiguration.buildMappings();
 
         fkNameToForeignKey = Maps.newHashMap();
         tableToIndexes = HashMultimap.create();
 
-        tables = newHashSet(hibernateConfiguration.getTableMappings());
+        quirks = new Quirks();
 
-        // criar mapeamento de table para PersistentClass
+        tables = newHashSet(hibernateConfiguration.getTableMappings());
+        criarMapeamentoTableParaPersistentClass();
+        criarMapeamentoColumnAliasParaTable();
+        criarMapeamentoColumnAliasToProperty();
+    }
+
+    private void criarMapeamentoTableParaPersistentClass() {
         tableToClass = Multimaps.index(hibernateConfiguration.getClassMappings(),
                 new Function<PersistentClass, Table>() {
                     public Table apply(PersistentClass input) {
                         return input.getTable();
                     }
                 });
+    }
 
-        // criar mapeamento de ColumnAlias para Table
+    @SuppressWarnings(UNCHECKED)
+    private void criarMapeamentoColumnAliasParaTable() {
         Map<String, Table> columnAliasToTable = Maps.newHashMap();
         for (Table table : tables) {
             HashSet<Column> cols = newHashSet(table.getColumnIterator());
@@ -133,13 +135,14 @@ public class Valentrim {
                 columnAliasToTable.put(getColumnUniqueAlias(table, column), table);
             }
         }
+    }
 
-        // Criar mapeamento de Column para Property
+    @SuppressWarnings(UNCHECKED)
+    private void criarMapeamentoColumnAliasToProperty() {
         Multimap<Table, Property> tableToProperties = HashMultimap.create();
-
         for (PersistentClass persistentClass : newHashSet(hibernateConfiguration.getClassMappings())) {
             tableToProperties.putAll(persistentClass.getTable(),
-                    Sets.<Property> newHashSet(persistentClass.getIdentifierProperty()));
+                    Sets.newHashSet(persistentClass.getIdentifierProperty()));
             tableToProperties.putAll(persistentClass.getTable(),
 
             Sets.<Property> newHashSet(persistentClass.getDeclaredPropertyIterator()));
@@ -184,7 +187,7 @@ public class Valentrim {
         Pattern patt = Pattern.compile("^[A-Z]{" + PREFIX_LENGTH + "}_$");
         Matcher m = patt.matcher(prefix);
 
-        List<String> violations = Lists.<String> newArrayList();
+        List<String> violations = Lists.newArrayList();
 
         char tableNameFirstLetter = name.charAt(PREFIX_LENGTH + 1);
         char prefixFistLetter = prefix.charAt(0);
@@ -207,6 +210,10 @@ public class Valentrim {
         }
     }
 
+    private void processSequences(Table table) {
+        geradorVBScript.createSequence(table);
+    }
+
     private void processForeignKeys(Table table) {
         ListMultimap<Table, ForeignKey> refTableToForeignKey = getReferencedTableToForeignKeyMapping(table);
 
@@ -215,8 +222,7 @@ public class Valentrim {
 
             int numberOfFks = foreignKeysReferencingRefTable.size();
 
-            for (int currentFk = 0; currentFk < numberOfFks; currentFk++) {
-                ForeignKey foreignKey = foreignKeysReferencingRefTable.get(currentFk);
+            for (ForeignKey foreignKey : foreignKeysReferencingRefTable) {
 
                 // CHECKSTYLE:OFF
                 if (numberOfFks == 1) {
@@ -252,13 +258,11 @@ public class Valentrim {
     private ListMultimap<Table, ForeignKey> getReferencedTableToForeignKeyMapping(Table table) {
         @SuppressWarnings(UNCHECKED)
         Set<ForeignKey> foreignKeys = newHashSet(table.getForeignKeyIterator());
-        ListMultimap<Table, ForeignKey> refTableToForeignKey = Multimaps.<Table, ForeignKey> index(foreignKeys,
-                new Function<ForeignKey, Table>() {
-                    public Table apply(ForeignKey input) {
-                        return input.getReferencedTable();
-                    }
-                });
-        return refTableToForeignKey;
+        return Multimaps.index(foreignKeys, new Function<ForeignKey, Table>() {
+            public Table apply(ForeignKey input) {
+                return input.getReferencedTable();
+            }
+        });
     }
 
     private void createForeignKeyIndex(Table table, Table refTable, ForeignKey foreignKey, Column column) {
@@ -290,12 +294,20 @@ public class Valentrim {
         LOGGER.debug(table.getName() + "... FK " + foreignKey.getName() + " nao teve nenhum index criado.");
     }
 
+    @SuppressWarnings(UNCHECKED)
+    private Set<Column> getPkColumns(Table table) {
+        Set<Column> pkColumns = new HashSet<Column>();
+        if (table.hasPrimaryKey()) {
+            pkColumns.addAll(table.getPrimaryKey().getColumns());
+        }
+        return pkColumns;
+    }
+
     private String getForeignKeyIndexName(Table table, Table refTable, ForeignKey foreignKey) {
         // IRABCXYZ => FKXYZABC
         // IRABCXY2 => FKXYZAB2
         // IRABCX12 => FKXYZA12
         String fkName = foreignKey.getName();
-        fkName.charAt(fkName.length() - 1);
 
         String lastChar = String.valueOf(fkName.charAt(fkName.length() - 1));
         String penultimateChar = String.valueOf(fkName.charAt(fkName.length() - 2));
@@ -338,14 +350,12 @@ public class Valentrim {
         if (numberOfFks < 10) {
             // "IRAAABBB" -> "IRAAABB9"
             CharSequence tableName = tableNamePrefix(table).subSequence(0, PREFIX_LENGTH - 1);
-            format = "IR" + refTableName + tableName + "[" + lastCharOfPrefix + "|2-" + (numberOfFks + 1) + "]";
-
+            format = "IR" + refTableName + tableName + '[' + lastCharOfPrefix + "|1-" + (numberOfFks + 1) + ']';
         } else {
             // "IRAAABBB" -> "IRAAAB99"
             CharSequence tableName = tableNamePrefix(table).subSequence(0, PREFIX_LENGTH - 2);
-            format = "IR" + refTableName + tableName + "[" + penultimateCharOfPrefix + "\\d][" + lastCharOfPrefix
+            format = "IR" + refTableName + tableName + '[' + penultimateCharOfPrefix + "\\d][" + lastCharOfPrefix
                     + "\\d]";
-
         }
 
         Pattern patt = Pattern.compile("^" + format + "$");
@@ -358,48 +368,84 @@ public class Valentrim {
     }
 
     private void processPrimaryKey(Table table) {
-        if (!table.hasPrimaryKey()) {
-            LOGGER.error(table.getName() + "... tabela NAO tem chave primaria! Ignorando...");
-            return;
+        if (table.hasPrimaryKey()) {
+            PrimaryKey pk = table.getPrimaryKey();
+
+            // Se tiver pk, troca por instancia de PrimaryKeyWithConstraintName
+            // para que nome da pk seja colocado na definição da table
+            LOGGER.debug(table.getName() + "... tabela tem chave primária " + pk.getName()
+                    + ". Trocando PrimaryKey por PrimaryKeyWithConstraintName.");
+
+            pk.setName(getPkName(table));
+            table.setPrimaryKey(new PrimaryKeyWithConstraintName(table.getPrimaryKey()));
+        } else {
+            LOGGER.warn(table.getName() + "... tabela NÃO tem chave primária! Gerando chave com todas as colunas");
+            PrimaryKey pk = gerarChaveComTodasAsColunas(table);
+            table.setPrimaryKey(pk);
         }
-
-        PrimaryKey pk = table.getPrimaryKey();
-        pk.setName("PK_" + tableNamePrefix(table));
-
-        // Se tiver pk, troca por instancia de PrimaryKeyWithConstraintName
-        // para que nome da pk seja colocado na definicao da table
-        LOGGER.debug(table.getName() + "... tabela tem chave primaria " + pk.getName()
-                + ". Trocando PrimaryKey por PrimaryKeyWithConstraintName.");
-        table.setPrimaryKey(new PrimaryKeyWithConstraintName(table.getPrimaryKey()));
     }
 
-    @SuppressWarnings({UNCHECKED})
+    private PrimaryKey gerarChaveComTodasAsColunas(Table table) {
+        // Por algum motivo, tabelas criadas automaticamente (por @JoinColumn e @CollectionTable) estão vindo sem PK.
+        // Não sei se é um erro do hibernate ou alguma coisa que fizemos. Para contornar isso, geramos uma chave
+        // incluindo todas as colunas da tabela.
+        // Isso não funciona para algumas tabelas @CollectionTable que têm colunas que não participam da PK. Nesses
+        // casos, convertemos uma UniqueKey especificada manualmente em PK.
+        PrimaryKey pkBasica = new PrimaryKey();
+        pkBasica.setName(getPkName(table));
+        pkBasica.setTable(table);
+
+        // Correção para gerar as primary keys de @CollectionTables a partir de uma UK definida manualmente.
+        // alimentado por quirks.properties
+        if (quirks.getCollectionTables().contains(table.getName())) {
+            Map<String, UniqueKey> uniqueKeysMap = getUniqueKeysMap(table);
+            int numeroUKs = uniqueKeysMap.size();
+            if (numeroUKs != 1) {
+                throw new IllegalStateException("Tabela não possui e PK e possui " + numeroUKs
+                        + " UKs, não é possível gerar a PK.");
+            }
+
+            UniqueKey uk = uniqueKeysMap.entrySet().iterator().next().getValue();
+            pkBasica.addColumns(uk.getColumnIterator());
+
+            // Infelizmente, mesmo removendo a UK ela volta, não consegui descobrir onde. Uma possibilidade é usar o
+            // mecanismo de substituição para removê-la.
+            uniqueKeysMap.remove(uk.getName());
+        } else {
+            pkBasica.addColumns(table.getColumnIterator());
+        }
+
+        return new PrimaryKeyWithConstraintName(pkBasica);
+    }
+
+    private String getPkName(Table table) {
+        return "PK_" + tableNamePrefix(table);
+    }
+
+    @SuppressWarnings(UNCHECKED)
     private void processUniqueConstraints(Table table) {
         Set<UniqueKey> uniques = newHashSet(table.getUniqueKeyIterator());
         Map<String, UniqueKey> uniqueKeys = getUniqueKeysMap(table);
 
         for (UniqueKey uk : uniques) {
-            Set<Column> columns = newHashSet(uk.columnIterator());
-            StringBuilder sb = new StringBuilder("UK_").append(tableNamePrefix(table));
-            for (Column column : columns) {
-                sb.append(UNDERSCORE);
-                String uniqueKeyNamePartForColumn = (String) column.getName().subSequence(0,
-                        Math.min(PREFIX_LENGTH + 1 + COLUMN_NAME_LENGTH_FOR_UNIQUEKEY_NAME, column.getName().length()));
-                sb.append(uniqueKeyNamePartForColumn);
-            }
             uniqueKeys.remove(uk.getName());
 
             Index redundantIndex = getRedundantIndexForUniqueKey(uk, table);
             if (redundantIndex == null) {
-                String ukName = sb.toString();
-                uk.setName(ukName.substring(0, Math.min(UK_NAME_MAX_LENGTH, ukName.length())));
+                if (!nomeEspecificadoManualmente(uk.getName(), table)) {
+                    String ukName = makeUKName(table, uk);
+                    uk.setName(ukName.substring(0, Math.min(UK_NAME_MAX_LENGTH, ukName.length())));
+                }
+
                 LOGGER.debug(table.getName() + "... Substituindo UniqueKey por UniqueKeyWithConstraintName para UK "
-                        + ukName);
+                        + uk.getName());
                 uniqueKeys.put(uk.getName(), new UniqueKeyWithConstraintName(uk));
 
+                validarUniqueComColunasNullable(uk, table.getName());
+
             } else {
-                LOGGER.debug(table.getName() + "... Index " + redundantIndex.getName() + " e redundante com UK "
-                        + uk.getName() + "." + " UK sera removida e substituida por UniqueIndex "
+                LOGGER.debug(table.getName() + "... Index " + redundantIndex.getName() + " é redundante com UK "
+                        + uk.getName() + "." + " UK será removida e substituída por UniqueIndex "
                         + redundantIndex.getName());
                 Map<String, Index> indexesMap = getIndexesMap(table);
                 indexesMap.remove(redundantIndex.getName());
@@ -408,9 +454,10 @@ public class Valentrim {
         }
     }
 
+    /**
+     * Checa se já existe algum index de foreign key relativo as mesmas colunas da UK
+     */
     @SuppressWarnings(UNCHECKED)
-    // Checa se ja existe algum index de foreign key relativo as mesmas colunas
-    // da UK
     private Index getRedundantIndexForUniqueKey(UniqueKey uk, Table table) {
         Set<Column> ukColumns = Sets.newHashSet(uk.getColumnIterator());
         for (Index index : tableToIndexes.get(table)) {
@@ -420,6 +467,34 @@ public class Valentrim {
             }
         }
         return null;
+    }
+
+    private boolean nomeEspecificadoManualmente(String name, Table table) {
+        return name.startsWith(PREFIXO_UK + tableNamePrefix(table));
+    }
+
+    @SuppressWarnings(UNCHECKED)
+    private String makeUKName(Table table, UniqueKey uk) {
+        Set<Column> columns = newHashSet(uk.columnIterator());
+        StringBuilder sb = new StringBuilder(PREFIXO_UK).append(tableNamePrefix(table));
+        for (Column column : columns) {
+            sb.append(UNDERSCORE);
+            String uniqueKeyNamePartForColumn = (String) column.getName().subSequence(0,
+                    Math.min(PREFIX_LENGTH + 1 + COLUMN_NAME_LENGTH_FOR_UNIQUEKEY_NAME, column.getName().length()));
+            sb.append(uniqueKeyNamePartForColumn);
+        }
+        return sb.toString();
+    }
+
+    private void validarUniqueComColunasNullable(UniqueKey uk, String tableName) {
+        Iterator<?> columnIterator = uk.getColumnIterator();
+        while (columnIterator.hasNext()) {
+            Column coluna = (Column) columnIterator.next();
+            if (coluna.isNullable()) {
+                LOGGER.warn("UK " + uk.getName() + " ( " + tableName + ") contém colunas nullable e será ignorada.");
+                return;
+            }
+        }
     }
 
     // "Hibernate wont let me... entao vamos usar um pouco de forca bruta!"
@@ -462,8 +537,25 @@ public class Valentrim {
         return indexes;
     }
 
-    @SuppressWarnings(UNCHECKED)
     private void processColumns(Table table) {
+        validarColunasUnique(table);
+        validarPrefixoDeColunas(table);
+    }
+
+    private void validarColunasUnique(Table table) {
+        Iterator<?> iterator = table.getColumnIterator();
+        while (iterator.hasNext()) {
+            Column coluna = (Column) iterator.next();
+            if (coluna.isUnique()) {
+                throw new IllegalStateException("Coluna " + coluna.getName()
+                        + ": Não utilize unique = true, crie um @UniqueConstraint "
+                        + "no @Table para seguir o padrão das demais tabelas.");
+            }
+        }
+    }
+
+    @SuppressWarnings(UNCHECKED)
+    private void validarPrefixoDeColunas(Table table) {
         Set<Column> fkColumns = getFkColumns(table);
 
         boolean validarPrefixoColuna = !DDLUtils.isEnvers(table, config);
@@ -477,23 +569,18 @@ public class Valentrim {
     }
 
     @SuppressWarnings(UNCHECKED)
-    private Set<Column> getPkColumns(Table table) {
-        Set<Column> pkColumns = new HashSet<Column>();
-        if (table.hasPrimaryKey()) {
-            pkColumns.addAll(table.getPrimaryKey().getColumns());
-        }
-        return pkColumns;
-    }
-
-    @SuppressWarnings(UNCHECKED)
     private Set<Column> getFkColumns(Table table) {
         Set<Column> fkColumns = new HashSet<Column>();
 
-        Set<ForeignKey> fks = Sets.<ForeignKey> newHashSet(table.getForeignKeyIterator());
+        Set<ForeignKey> fks = Sets.newHashSet(table.getForeignKeyIterator());
         for (ForeignKey fk : fks) {
             fkColumns.addAll(newHashSet(fk.getColumnIterator()));
         }
         return fkColumns;
+    }
+
+    private void processComments(Table table) {
+        geradorVBScript.processTableProperties(table);
     }
 
     private void validateColumnName(Table table, Column column, boolean validarPrefixoColuna) {

@@ -11,13 +11,18 @@ import java.util.Set;
 import javax.persistence.Entity;
 import javax.persistence.SequenceGenerator;
 
+import marcos2250.powernate.comment.CommentBuilder;
+import marcos2250.powernate.graph.GraphGenerator;
+import marcos2250.powernate.graph.Node;
+import marcos2250.powernate.util.Config;
+import marcos2250.powernate.util.DDLUtils;
+import marcos2250.powernate.valentrim.Quirks;
+
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.WordUtils;
 import org.hibernate.envers.AuditTable;
 import org.hibernate.mapping.Column;
-import org.hibernate.mapping.ManyToOne;
-import org.hibernate.mapping.OneToOne;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.Property;
 import org.hibernate.mapping.Table;
@@ -27,12 +32,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.io.Files;
-
-import marcos2250.powernate.comment.CommentBuilder;
-import marcos2250.powernate.graph.GraphGenerator;
-import marcos2250.powernate.graph.Node;
-import marcos2250.powernate.util.Config;
-import marcos2250.powernate.util.DDLUtils;
 
 public class PowerDesignerVBScriptGenerator {
 
@@ -60,10 +59,13 @@ public class PowerDesignerVBScriptGenerator {
 
     private Config config;
 
-    public PowerDesignerVBScriptGenerator(Config config, Multimap<Table, PersistentClass> tableToClass,
+    private Quirks quirks;
+
+    public PowerDesignerVBScriptGenerator(Config config, Quirks quirks, Multimap<Table, PersistentClass> tableToClass,
             Multimap<String, Property> columnAliasToProperty) {
 
         this.config = config;
+        this.quirks = quirks;
 
         this.tableToClass = tableToClass;
         this.columnAliasToProperty = columnAliasToProperty;
@@ -120,7 +122,7 @@ public class PowerDesignerVBScriptGenerator {
         return config.getVBColor(className);
     }
 
-    private Integer getTableClassIndex(Table table, String className) {
+    private Integer getTableClassIndex(String className) {
         return config.getClassCode(className);
     }
 
@@ -142,7 +144,7 @@ public class PowerDesignerVBScriptGenerator {
 
             commentBuilder.withProperty(property).withColumnName(columnName);
 
-            String sequenceName = obterNomeDaSequenceDaColunaSeExistente(table, column, isPk);
+            String sequenceName = obterNomeDaSequenceDaColunaSeExistente(table, isPk);
 
             printf("setColumnProperties \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", %s\n", //
                     table.getName(), //
@@ -175,9 +177,6 @@ public class PowerDesignerVBScriptGenerator {
             if ("PersistentLocalDate".equals(typeName) || "LocalDateUserType".equals(typeName)) {
                 return "current date";
             }
-            // if ("string".equals(typeName)) {
-            // return EMPTY_STRING;
-            // }
             return "0";
         }
 
@@ -186,14 +185,17 @@ public class PowerDesignerVBScriptGenerator {
 
     public void processRelation(String parentTableName, String childTableName, String irName, String fkName,
             String irComment, String fkComment, Column childColumn) {
-
         String childColumnName = childColumn.getName();
-        Boolean fkUniqueConstraint = isForeignKeyIndexUniqueConstraint(childColumn);
 
         println("\n\'Relationship for: " + parentTableName + " to " + childTableName);
-        printf("createRelation \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", %s, \"%s\", \"%s\"\n", //
-                parentTableName, childTableName, childColumnName, irName, fkName, fkUniqueConstraint, irComment,
-                fkComment);
+
+        String fkNameArgumento = fkName;
+        if (quirks.getObjectsToAvoid().contains(fkName)) {
+            fkNameArgumento = StringUtils.EMPTY;
+        }
+
+        printf("createRelation \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"\n", //
+                parentTableName, childTableName, childColumnName, irName, fkNameArgumento, irComment, fkComment);
         println();
 
         graphGenerator.addNeighbor(parentTableName, childTableName);
@@ -210,15 +212,13 @@ public class PowerDesignerVBScriptGenerator {
     }
 
     private Property getProperty(Table table, Column column) {
-        Property property = null;
-
         Collection<Property> properties = columnAliasToProperty.get(getColumnUniqueAlias(table, column));
         for (Property prop : properties) {
             if (tableToClass.get(table).contains(prop.getPersistentClass())) {
                 return prop;
             }
         }
-        return property;
+        return null;
     }
 
     public void createSequence(Table table) {
@@ -229,7 +229,7 @@ public class PowerDesignerVBScriptGenerator {
         }
     }
 
-    private String obterNomeDaSequenceDaColunaSeExistente(Table table, Column column, boolean isPk) {
+    private String obterNomeDaSequenceDaColunaSeExistente(Table table, boolean isPk) {
         if (!isPk) {
             return EMPTY_STRING;
         }
@@ -279,8 +279,8 @@ public class PowerDesignerVBScriptGenerator {
         String strPosY;
         int xCenter = PD_GRAPH_X_MAX;
         int yCenter = PD_GRAPH_Y_MAX;
-        int rescaleFactorX = PD_GRAPH_X_MAX * 2 / GRAPH_SCALE_X;
-        int rescaleFactorY = PD_GRAPH_Y_MAX * 2 / GRAPH_SCALE_Y;
+        int rescaleFactorX = (PD_GRAPH_X_MAX + PD_GRAPH_X_MAX) / GRAPH_SCALE_X;
+        int rescaleFactorY = (PD_GRAPH_Y_MAX + PD_GRAPH_Y_MAX) / GRAPH_SCALE_Y;
 
         for (Node node : allNodes) {
             strPosX = EMPTY_STRING + (node.getCoordinateX() * rescaleFactorX - xCenter);
@@ -343,25 +343,6 @@ public class PowerDesignerVBScriptGenerator {
         return getEntitySuperclass(superclass);
     }
 
-    private Boolean isForeignKeyIndexUniqueConstraint(Column column) {
-
-        // solucao para prevenir WARNING de "Column Mandatory" para FKs nullables.
-        if (column.isNullable()) {
-            return Boolean.FALSE;
-        }
-
-        Boolean fkUniqueConstraint; // inferir se e unique
-        if (OneToOne.class.isInstance(column.getValue())) {
-            fkUniqueConstraint = Boolean.TRUE;
-        } else if (ManyToOne.class.isInstance(column.getValue())) {
-            fkUniqueConstraint = ManyToOne.class.cast(column.getValue()).isLogicalOneToOne();
-        } else {
-            fkUniqueConstraint = Boolean.FALSE;
-        }
-
-        return fkUniqueConstraint;
-    }
-
     private void preProcessTables(Set<Table> tables) {
 
         if (config.isRearrangeGraphEnversTables()) {
@@ -394,7 +375,7 @@ public class PowerDesignerVBScriptGenerator {
                 continue;
             }
 
-            graphGenerator.addNode(table.getName(), getTableClassIndex(table, getQualifiedClassName(table)));
+            graphGenerator.addNode(table.getName(), getTableClassIndex(getQualifiedClassName(table)));
         }
     }
 

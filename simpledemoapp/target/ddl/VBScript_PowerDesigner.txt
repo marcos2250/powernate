@@ -170,7 +170,7 @@ function isTableAssociatedToATablespace(tableName)
      isTableAssociatedToATablespace = false
 end function
 
-sub createOrUpdateFK(fkName, ir, childTable, fkComment, fkUniqueConstraint)
+sub createOrUpdateFK(fkName, ir, childTable, fkComment)
      dim fk, i
      set fk = findFkForTable(childTable, ir, fkName)
 
@@ -187,7 +187,6 @@ sub createOrUpdateFK(fkName, ir, childTable, fkComment, fkUniqueConstraint)
      fk.SetNameAndCode fkName, fkName
      fk.LinkedObject = ir
      fk.Comment = fkComment
-     fk.Unique = fkUniqueConstraint
 
      if fk.Name <> fkName then
          output "WARNING: The FK " & fkName & " has a wrong name. Actual is " & fk.Name  & ", when it should be " & fkName
@@ -323,7 +322,7 @@ sub setColumnProperties(tableName, columnName, comment, sequenceName, suggestedD
   end if
 end sub 
 
-sub createRelation(parentTableName, childTableName, childColumnName, irName, fkName, fkUniqueConstraint, irComment, fkComment) 
+sub createRelation(parentTableName, childTableName, childColumnName, irName, fkName, irComment, fkComment) 
      dim parentTable, childTable, childColumn
  
      set parentTable = ActiveModel.FindChildByName(parentTableName, cls_Table)
@@ -362,7 +361,9 @@ sub createRelation(parentTableName, childTableName, childColumnName, irName, fkN
      end if
 
      'Create the FK
-     createOrUpdateFK fkName, ir, childTable, fkComment, fkUniqueConstraint
+     if fkName <> "" then
+         createOrUpdateFK fkName, ir, childTable, fkComment
+     end if
 
 end sub
 
@@ -385,12 +386,12 @@ sub createSequence(sequenceName)
      if not existsObject(sequence) then
           set sequence = ActiveModel.Sequences.CreateNew()
           sequence.SetNameAndCode sequenceName, sequenceName
+          sequence.PhysicalOptions = "increment by 1 start with 1 maxvalue 2147483647 minvalue 1 no cycle cache 20 no order"
      end if
      set user = ActiveModel.FindChildByName(defaultUserName, PdPDM.cls_User)
      sequence.Owner = user
      grantPermissionGroupForSequence sequence, defaultUserGroupName
-     grantPermissionGroupForSequence sequence, defaultEtlGroupName
-     sequence.PhysicalOptions = "increment by 1 start with 1 maxvalue 2147483647 minvalue 1 no cycle cache 20 no order"
+     grantPermissionGroupForSequence sequence, defaultEtlGroupName     
 end sub
 
 
@@ -429,46 +430,46 @@ end sub
 defaultUserName = "APP"
 defaultUserGroupName = "GAPPDW"
 defaultEtlGroupName = "GETLDW"
-defaultTableSpace = "TSBJR4"
+defaultTableSpace = "TSAPP4"
 numberOfRows = "70000"
 
 'Table properties for: PER_PERSON
-setTableProperties "PER_PERSON", "/NOME: Person."+ vbcrlf +"/FUNÇÃO: Guardar instâncias de Person geradas pela aplicação."+ vbcrlf +"/EXEMPLOS: Ver exemplos nos campos."+ vbcrlf +"/FONTE: Dados informados pelo usuário e gerados pelo sistema.", 0
-setColumnProperties "PER_PERSON", "PER_ST_FIRST_NAME", "/NOME: Per st first name."+ vbcrlf +"/FUNÇÃO: Guardar Per st first name de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
-setColumnProperties "PER_PERSON", "PER_DT_BIRTH", "/NOME: Per dt birth."+ vbcrlf +"/FUNÇÃO: Guardar Per dt birth de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
-setColumnProperties "PER_PERSON", "PER_ST_LAST_NAME", "/NOME: Per st last name."+ vbcrlf +"/FUNÇÃO: Guardar Per st last name de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
-setColumnProperties "PER_PERSON", "PER_ID", "/NOME: Per id."+ vbcrlf +"/FUNÇÃO: Guardar Per id de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "0", true
-setColumnProperties "PER_PERSON", "PER_NM_CELLPHONE", "/NOME: Per nm cellphone."+ vbcrlf +"/FUNÇÃO: Guardar Per nm cellphone de Per person."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
+setTableProperties "PER_PERSON", "/NOME: Person."+ vbcrlf +"/FUNCAO: Guardar instancias de Person geradas pela aplicacao."+ vbcrlf +"/EXEMPLOS: Ver exemplos nos campos."+ vbcrlf +"/FONTE: Dados informados pelo usuario e gerados pelo sistema.", 0
+setColumnProperties "PER_PERSON", "PER_DT_BIRTH", "/NOME: Per dt birth."+ vbcrlf +"/FUNCAO: Guardar Per dt birth de Per person."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "", false
+setColumnProperties "PER_PERSON", "PER_ST_FIRST_NAME", "/NOME: Per st first name."+ vbcrlf +"/FUNCAO: Guardar Per st first name de Per person."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "", false
+setColumnProperties "PER_PERSON", "PER_ST_LAST_NAME", "/NOME: Per st last name."+ vbcrlf +"/FUNCAO: Guardar Per st last name de Per person."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "", false
+setColumnProperties "PER_PERSON", "PER_ID", "/NOME: Per id."+ vbcrlf +"/FUNCAO: Guardar Per id de Per person."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "0", true
+setColumnProperties "PER_PERSON", "PER_NM_CELLPHONE", "/NOME: Per nm cellphone."+ vbcrlf +"/FUNCAO: Guardar Per nm cellphone de Per person."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "", false
 grantGroupPermissionForTable "PER_PERSON", "GAPPDW", "DELETE,INSERT,SELECT,UPDATE"
 grantGroupPermissionForTable "PER_PERSON", "GAPPDR", "SELECT"
 
 'Table properties for: PAR_PARTICIPANTS
 
 'Relationship for: PER_PERSON to PAR_PARTICIPANTS
-createRelation "PER_PERSON", "PAR_PARTICIPANTS", "PER_ID", "IRPERPAR", "FKPARPER", false, "Integridade referencial entre a tabela mãe PER_PERSON  e a coluna PER_ID da tabela filha PAR_PARTICIPANTS", "Chave estrangeira entre a tabela mãe PER_PERSON e a tabela filha PAR_PARTICIPANTS"
+createRelation "PER_PERSON", "PAR_PARTICIPANTS", "PER_ID", "IRPERPAR", "FKPARPER", "Integridade referencial entre a tabela mae PER_PERSON  e a coluna PER_ID da tabela filha PAR_PARTICIPANTS", "Chave estrangeira entre a tabela mae PER_PERSON e a tabela filha PAR_PARTICIPANTS"
 
 
 'Relationship for: PRJ_PROJECT to PAR_PARTICIPANTS
-createRelation "PRJ_PROJECT", "PAR_PARTICIPANTS", "PRJ_ID", "IRPRJPAR", "FKPARPRJ", false, "Integridade referencial entre a tabela mãe PRJ_PROJECT  e a coluna PRJ_ID da tabela filha PAR_PARTICIPANTS", "Chave estrangeira entre a tabela mãe PRJ_PROJECT e a tabela filha PAR_PARTICIPANTS"
+createRelation "PRJ_PROJECT", "PAR_PARTICIPANTS", "PRJ_ID", "IRPRJPAR", "FKPARPRJ", "Integridade referencial entre a tabela mae PRJ_PROJECT  e a coluna PRJ_ID da tabela filha PAR_PARTICIPANTS", "Chave estrangeira entre a tabela mae PRJ_PROJECT e a tabela filha PAR_PARTICIPANTS"
 
-setTableProperties "PAR_PARTICIPANTS", "/NOME: Par Participants."+ vbcrlf +"/FUNÇÃO: Guardar instâncias de Par Participants geradas pela aplicação."+ vbcrlf +"/EXEMPLOS: Ver exemplos nos campos."+ vbcrlf +"/FONTE: Dados informados pelo usuário e gerados pelo sistema.", 0
-setColumnProperties "PAR_PARTICIPANTS", "PRJ_ID", "/NOME: Prj id."+ vbcrlf +"/FUNÇÃO: Guardar Prj id de Par participants."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "0", true
-setColumnProperties "PAR_PARTICIPANTS", "PER_ID", "/NOME: Per id."+ vbcrlf +"/FUNÇÃO: Guardar Per id de Par participants."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "0", true
+setTableProperties "PAR_PARTICIPANTS", "/NOME: Par Participants."+ vbcrlf +"/FUNCAO: Guardar instancias de Par Participants geradas pela aplicacao."+ vbcrlf +"/EXEMPLOS: Ver exemplos nos campos."+ vbcrlf +"/FONTE: Dados informados pelo usuario e gerados pelo sistema.", 0
+setColumnProperties "PAR_PARTICIPANTS", "PRJ_ID", "/NOME: Prj id."+ vbcrlf +"/FUNCAO: Guardar Prj id de Par participants."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "0", true
+setColumnProperties "PAR_PARTICIPANTS", "PER_ID", "/NOME: Per id."+ vbcrlf +"/FUNCAO: Guardar Per id de Par participants."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "0", true
 grantGroupPermissionForTable "PAR_PARTICIPANTS", "GAPPDW", "DELETE,INSERT,SELECT,UPDATE"
 grantGroupPermissionForTable "PAR_PARTICIPANTS", "GAPPDR", "SELECT"
 
 'Table properties for: PRJ_PROJECT
-setTableProperties "PRJ_PROJECT", "/NOME: Project."+ vbcrlf +"/FUNÇÃO: Guardar instâncias de Project geradas pela aplicação."+ vbcrlf +"/EXEMPLOS: Ver exemplos nos campos."+ vbcrlf +"/FONTE: Dados informados pelo usuário e gerados pelo sistema.", 0
-setColumnProperties "PRJ_PROJECT", "PER_ST_NAME", "/NOME: Per st name."+ vbcrlf +"/FUNÇÃO: Guardar Per st name de Prj project."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
-setColumnProperties "PRJ_PROJECT", "PER_DT_END", "/NOME: Per dt end."+ vbcrlf +"/FUNÇÃO: Guardar Per dt end de Prj project."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
-setColumnProperties "PRJ_PROJECT", "PRJ_ID", "/NOME: Prj id."+ vbcrlf +"/FUNÇÃO: Guardar Prj id de Prj project."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "0", true
-setColumnProperties "PRJ_PROJECT", "PER_DT_BEGIN", "/NOME: Per dt begin."+ vbcrlf +"/FUNÇÃO: Guardar Per dt begin de Prj project."+ vbcrlf +"/DOMÍNIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usúario.", "", "", false
-setColumnProperties "PRJ_PROJECT", "PER_ST_STATUS", "/NOME: Per st status."+ vbcrlf +"/FUNÇÃO: Guardar Per st status de Prj project."+ vbcrlf +"/DOMÍNIO: 0 : ACTIVE | 1 : INACTIVE | "+ vbcrlf +"/FONTE: Enumeration ProjectStatus da aplicação", "", "", false
+setTableProperties "PRJ_PROJECT", "/NOME: Project."+ vbcrlf +"/FUNCAO: Guardar instancias de Project geradas pela aplicacao."+ vbcrlf +"/EXEMPLOS: Ver exemplos nos campos."+ vbcrlf +"/FONTE: Dados informados pelo usuario e gerados pelo sistema.", 0
+setColumnProperties "PRJ_PROJECT", "PRJ_ID", "/NOME: Prj id."+ vbcrlf +"/FUNCAO: Guardar Prj id de Prj project."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "0", true
+setColumnProperties "PRJ_PROJECT", "PRJ_DT_BEGIN", "/NOME: Prj dt begin."+ vbcrlf +"/FUNCAO: Guardar Prj dt begin de Prj project."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "", false
+setColumnProperties "PRJ_PROJECT", "PRJ_ST_NAME", "/NOME: Prj st name."+ vbcrlf +"/FUNCAO: Guardar Prj st name de Prj project."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "", false
+setColumnProperties "PRJ_PROJECT", "PRJ_DT_END", "/NOME: Prj dt end."+ vbcrlf +"/FUNCAO: Guardar Prj dt end de Prj project."+ vbcrlf +"/DOMINIO: n/a."+ vbcrlf +"/FONTE: Dados gerados pelo sistema ou usuario.", "", "", false
+setColumnProperties "PRJ_PROJECT", "PRJ_ST_STATUS", "/NOME: Prj st status."+ vbcrlf +"/FUNCAO: Guardar Prj st status de Prj project."+ vbcrlf +"/DOMINIO: 0 : ACTIVE | 1 : INACTIVE | "+ vbcrlf +"/FONTE: Enumeration ProjectStatus da aplicacao", "", "", false
 grantGroupPermissionForTable "PRJ_PROJECT", "GAPPDW", "DELETE,INSERT,SELECT,UPDATE"
 grantGroupPermissionForTable "PRJ_PROJECT", "GAPPDR", "SELECT"
 doPostProcessings
 
 'Rearranging table graph positions
-setTablePosition "PAR_PARTICIPANTS", 503912.24548810197, 701825.70267043
-setTablePosition "PER_PERSON", 520000.0, 662212.2998169878
-setTablePosition "PRJ_PROJECT", 461562.15503072494, 707699.9999999994
+setTablePosition "PRJ_PROJECT", 519888.1420135164, 431152.27269710775
+setTablePosition "PAR_PARTICIPANTS", 520000.0, 387337.6077419636
+setTablePosition "PER_PERSON", 520000.0, 345641.3079858456

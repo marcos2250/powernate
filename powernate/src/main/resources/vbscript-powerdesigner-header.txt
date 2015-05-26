@@ -170,7 +170,7 @@ function isTableAssociatedToATablespace(tableName)
      isTableAssociatedToATablespace = false
 end function
 
-sub createOrUpdateFK(fkName, ir, childTable, fkComment, fkUniqueConstraint)
+sub createOrUpdateFK(fkName, ir, childTable, fkComment)
      dim fk, i
      set fk = findFkForTable(childTable, ir, fkName)
 
@@ -187,7 +187,6 @@ sub createOrUpdateFK(fkName, ir, childTable, fkComment, fkUniqueConstraint)
      fk.SetNameAndCode fkName, fkName
      fk.LinkedObject = ir
      fk.Comment = fkComment
-     fk.Unique = fkUniqueConstraint
 
      if fk.Name <> fkName then
          output "WARNING: The FK " & fkName & " has a wrong name. Actual is " & fk.Name  & ", when it should be " & fkName
@@ -323,7 +322,7 @@ sub setColumnProperties(tableName, columnName, comment, sequenceName, suggestedD
   end if
 end sub 
 
-sub createRelation(parentTableName, childTableName, childColumnName, irName, fkName, fkUniqueConstraint, irComment, fkComment) 
+sub createRelation(parentTableName, childTableName, childColumnName, irName, fkName, irComment, fkComment) 
      dim parentTable, childTable, childColumn
  
      set parentTable = ActiveModel.FindChildByName(parentTableName, cls_Table)
@@ -362,7 +361,9 @@ sub createRelation(parentTableName, childTableName, childColumnName, irName, fkN
      end if
 
      'Create the FK
-     createOrUpdateFK fkName, ir, childTable, fkComment, fkUniqueConstraint
+     if fkName <> "" then
+         createOrUpdateFK fkName, ir, childTable, fkComment
+     end if
 
 end sub
 
@@ -385,12 +386,12 @@ sub createSequence(sequenceName)
      if not existsObject(sequence) then
           set sequence = ActiveModel.Sequences.CreateNew()
           sequence.SetNameAndCode sequenceName, sequenceName
+          sequence.PhysicalOptions = "increment by 1 start with 1 maxvalue 2147483647 minvalue 1 no cycle cache 20 no order"
      end if
      set user = ActiveModel.FindChildByName(defaultUserName, PdPDM.cls_User)
      sequence.Owner = user
      grantPermissionGroupForSequence sequence, defaultUserGroupName
-     grantPermissionGroupForSequence sequence, defaultEtlGroupName
-     sequence.PhysicalOptions = "increment by 1 start with 1 maxvalue 2147483647 minvalue 1 no cycle cache 20 no order"
+     grantPermissionGroupForSequence sequence, defaultEtlGroupName     
 end sub
 
 

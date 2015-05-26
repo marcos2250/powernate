@@ -36,17 +36,17 @@ public class Project {
         return id;
     }
 
-    @Column(name = "PER_ST_NAME")
+    @Column(name = "PRJ_ST_NAME")
     public String getName() {
         return name;
     }
 
-    @Column(name = "PER_DT_BEGIN")
+    @Column(name = "PRJ_DT_BEGIN")
     public LocalDate getBeginning() {
         return beginning;
     }
 
-    @Column(name = "PER_DT_END")
+    @Column(name = "PRJ_DT_END")
     public LocalDate getEnding() {
         return ending;
     }
@@ -59,7 +59,7 @@ public class Project {
         return participants;
     }
 
-    @Column(name = "PER_ST_STATUS")
+    @Column(name = "PRJ_ST_STATUS")
     @Enumerated(EnumType.ORDINAL)
     public ProjectStatus getStatus() {
         return status;
