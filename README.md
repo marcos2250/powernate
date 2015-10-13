@@ -15,6 +15,6 @@ How it works
 See **simpledemoapp** for a demonstration.
 
 1. Build and add *powernate* JAR in your project classpath;
-2. Create a configuration class extending *marcos2250.powernate.util.Config* and supply the required parameters;
+2. Supply required parameters in files **src/main/resources/powernate.properties** and **hibernate.cfg.xml**;
 3. Execute class **VisualPowernate**'s main method and follow instructions.
 
