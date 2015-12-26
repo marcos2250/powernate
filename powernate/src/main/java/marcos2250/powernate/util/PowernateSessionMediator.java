@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import marcos2250.powernate.comment.ColumnCommentAppender;
 import marcos2250.powernate.comment.EnumCommentAppender;
@@ -18,7 +19,7 @@ import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.dialect.Dialect;
-import org.hibernate.engine.SessionFactoryImplementor;
+import org.reflections.Reflections;
 
 import com.google.common.collect.Maps;
 
@@ -36,6 +37,7 @@ public class PowernateSessionMediator {
     protected int enversTableCode = 99;
 
     protected String defaultSchema;
+    protected String scanEntityPackagePrefix;
 
     protected List<ProjectModulesParams> modulesList;
 
@@ -55,8 +57,7 @@ public class PowernateSessionMediator {
     private SessionFactory sessionFactory;
     private Configuration hibernateConfiguration;
 
-    public void initialize() {
-
+    public PowernateSessionMediator() {
         Properties properties = new Properties();
 
         InputStream file = Thread.currentThread().getContextClassLoader().getResourceAsStream("powernate.properties");
@@ -72,7 +73,9 @@ public class PowernateSessionMediator {
         readProperties(properties);
 
         loadModulesList(properties);
+    }
 
+    public void initialize() {
         startHibernate();
     }
 
@@ -83,9 +86,19 @@ public class PowernateSessionMediator {
         defaultETLGroupName = properties.getProperty("defaultETLGroupName");
         defaultTableSpace = properties.getProperty("defaultTableSpace");
         defaultSchema = properties.getProperty("defaultSchema");
+        loadDialect(properties);
+        scanEntityPackagePrefix = properties.getProperty("scanEntityPackagePrefix");
         enversControlTable = properties.getProperty("enversControlTable");
         enversTypeControlTable = properties.getProperty("enversTypeControlTable");
         enversControlTableIdColumn = properties.getProperty("enversControlTableIdColumn");
+    }
+
+    private void loadDialect(Properties properties) {
+        String dialectProp = properties.getProperty("dialect");
+        if (dialectProp == null) {
+            return;
+        }
+        setDialect(dialectProp);
     }
 
     private void loadModulesList(Properties properties) {
@@ -113,10 +126,22 @@ public class PowernateSessionMediator {
 
         hibernateConfiguration = new Configuration();
         hibernateConfiguration.configure();
+        hibernateConfiguration.setProperty("hibernate.dialect", dialect.getClass().getName());
+
+        Set<Class<?>> annotatedClasses = getAnnotatedClasses();
+        for (Class<?> annotatedClass : annotatedClasses) {
+            hibernateConfiguration.addAnnotatedClass(annotatedClass);
+        }
+
         sessionFactory = hibernateConfiguration.buildSessionFactory();
         sessionFactory.openSession();
+    }
 
-        dialect = ((SessionFactoryImplementor) sessionFactory).getDialect();
+    private Set<Class<?>> getAnnotatedClasses() {
+        Reflections reflections = new Reflections(scanEntityPackagePrefix);
+        Set<Class<?>> annotated = reflections.getTypesAnnotatedWith(javax.persistence.Entity.class);
+        annotated.addAll(reflections.getTypesAnnotatedWith(org.hibernate.annotations.Entity.class));
+        return annotated;
     }
 
     public int getClassCode(String className) {
@@ -158,8 +183,18 @@ public class PowernateSessionMediator {
         return dialect;
     }
 
-    public void setDialect(Dialect dialect) {
-        this.dialect = dialect;
+    public void setDialect(String dialectProp) {
+        Dialect d = null;
+        try {
+            Class<?> forName = Class.forName(dialectProp.trim());
+            if (forName == null) {
+                this.dialect = null;
+            }
+            d = (Dialect) forName.newInstance();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        this.dialect = d;
     }
 
     public Map<Class<?>, ColumnCommentAppender> getColumnTypeToCommentAppender() {
@@ -170,7 +205,8 @@ public class PowernateSessionMediator {
     }
 
     public String getCreateSequenceString(String sequenceName) {
-        return "create sequence " + sequenceName; // TODO especifico do dialeto do DB2
+        // TODO especifico do dialeto do DB2
+        return "create sequence " + sequenceName;
     }
 
     public String getPermissionGroupName(Permission write) {
@@ -277,6 +313,22 @@ public class PowernateSessionMediator {
     @SuppressWarnings("deprecation")
     public Connection getConnection() {
         return sessionFactory.getCurrentSession().connection();
+    }
+
+    public String getScanEntityPackagePrefix() {
+        return scanEntityPackagePrefix;
+    }
+
+    public void setScanEntityPackagePrefix(String scanEntityPackagePrefix) {
+        this.scanEntityPackagePrefix = scanEntityPackagePrefix;
+    }
+
+    public void setSchema(String text) {
+        this.defaultSchema = text;
+    }
+
+    public void setTablespace(String text) {
+        this.defaultTableSpace = text;
     }
 
 }

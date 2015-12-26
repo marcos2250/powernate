@@ -48,8 +48,8 @@ public class ModelWindow extends JInternalFrame {
 
     public ModelWindow(MainWindow mainWindow) {
 
-        super("Visualizacao", true, // resizable
-                true, // closable
+        super("Model view", true, // resizable
+                false, // closable
                 true, // maximizable
                 true);// iconifiable
         this.mainWindow = mainWindow;
@@ -129,7 +129,6 @@ public class ModelWindow extends JInternalFrame {
         });
 
         getContentPane().add(view);
-
     }
 
     private class ModelView extends JPanel {
@@ -269,8 +268,8 @@ public class ModelWindow extends JInternalFrame {
     public void fitView() {
 
         float minX, minY, maxX, maxY;
-        minX = 0;
-        minY = 0;
+        minX = 10000;
+        minY = 10000;
         maxX = 0;
         maxY = 0;
 
@@ -286,13 +285,13 @@ public class ModelWindow extends JInternalFrame {
                 minX = (float) node.getCoordinateX();
             }
             if (node.getCoordinateX() < minY) {
-                minY = (float) node.getCoordinateX();
+                minY = (float) node.getCoordinateY();
             }
             if (node.getCoordinateX() > maxX) {
                 maxX = (float) node.getCoordinateX();
             }
             if (node.getCoordinateX() > maxY) {
-                maxY = (float) node.getCoordinateX();
+                maxY = (float) node.getCoordinateY();
             }
         }
 
@@ -337,7 +336,9 @@ public class ModelWindow extends JInternalFrame {
     public void atualizarView() {
         repaint();
         fitView();
-        atualizaGrafico();
+    	if (graphics != null) {
+    		atualizaGrafico();
+    	}
     }
 
 }

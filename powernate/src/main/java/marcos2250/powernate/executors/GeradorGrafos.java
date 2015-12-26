@@ -16,14 +16,15 @@ public class GeradorGrafos implements AbstractExecutor {
 
         CorretorDeScriptDDL corretorDeScriptDDL = config.getCorretorDeScriptDDL();
 
-        if (corretorDeScriptDDL == null || corretorDeScriptDDL.getValentrim() == null
+        if (corretorDeScriptDDL == null || corretorDeScriptDDL.getValentrim() == null //
                 || corretorDeScriptDDL.getValentrim().getGeradorVBScript() == null) {
             return;
         }
 
-        PowerDesignerVBScriptGenerator processadorVBScript = corretorDeScriptDDL.getValentrim().getGeradorVBScript();
+        PowerDesignerVBScriptGenerator processadorVBScript = //
+        corretorDeScriptDDL.getValentrim().getGeradorVBScript();
 
-        janela.notificar("Gerando nova disposicao dos grafos...");
+        janela.notificar("Arranging new graph...");
 
         processadorVBScript = corretorDeScriptDDL.getValentrim().getGeradorVBScript();
 
@@ -31,7 +32,7 @@ public class GeradorGrafos implements AbstractExecutor {
 
         config.setGeneratedGraphs(true);
 
-        janela.notificar("Disposicao dos grafos gerada!");
+        janela.notificar("Graph generated!");
 
     }
 

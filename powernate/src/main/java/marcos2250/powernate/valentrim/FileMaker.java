@@ -19,8 +19,8 @@ import com.google.common.io.Resources;
 
 public class FileMaker {
 
-    public static final String ERRO_AO_GERAR_ARQUIVO = "Erro ao gerar arquivo";
-    public static final String ERRO_AO_LER_ARQUIVO = "Erro ao ler arquivo";
+    public static final String ERRO_AO_GERAR_ARQUIVO = "Error while generating file!";
+    public static final String ERRO_AO_LER_ARQUIVO = "Error while reading file!";
     private static final String SQL_COMMANDS_DELIMITER = "; \n\n";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FileMaker.class);
@@ -52,7 +52,7 @@ public class FileMaker {
 
         criarArquivo();
         escreverArquivo();
-        LOGGER.info("Arquivo de DDL gerado: " + arquivo.getAbsolutePath());
+        LOGGER.info("Saved DDL file: " + arquivo.getAbsolutePath());
     }
 
     private void criarArquivo() {

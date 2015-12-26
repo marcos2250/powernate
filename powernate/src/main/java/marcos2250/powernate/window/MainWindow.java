@@ -4,6 +4,7 @@ import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.beans.PropertyVetoException;
 
 import javax.swing.BoxLayout;
 import javax.swing.JDesktopPane;
@@ -16,14 +17,12 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
-import javax.swing.SwingWorker;
 import javax.swing.border.BevelBorder;
 
 import marcos2250.powernate.executors.AbstractExecutor;
 import marcos2250.powernate.executors.ExportadorComparacaoBancoHomologacao;
 import marcos2250.powernate.executors.ExportadorDDLVisual;
 import marcos2250.powernate.executors.GeradorGrafos;
-import marcos2250.powernate.executors.ImportadorHibernateMetadata;
 import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
 
@@ -33,27 +32,28 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
 
     private static final String APP_TITLE = "Powernate HBM-to-PDM converter";
 
-    private static final String MENU_FILE = "Arquivo";
-    private static final String MENU_NEW = "Novo...";
-    private static final String MENU_IMPORT = "Importar modelo...";
-    private static final String MENU_GENERATE_GRAPH = "Gerar disposicao visual...";
-    private static final String MENU_SAVE = "Exportar scripts DDL e VBScript";
-    private static final String MENU_SAVE_COMPARE_DB = "Exportar comparativo com banco";
-    private static final String MENU_EXIT = "Sair";
-    private static final String MENU_HELP = "Ajuda";
-    private static final String MENU_ABOUT = "Sobre...";
+    private static final String MENU_FILE = "File";
+    private static final String MENU_SCAN = "Scan project...";
+    private static final String MENU_GENERATE_GRAPH = "Generate visual arrangement...";
+    private static final String MENU_SAVE = "Export to Powerdesigner";
+    private static final String MENU_SAVE_COMPARE_DB = "Export comparison";
+    private static final String MENU_EXIT = "Exit";
+    private static final String MENU_HELP = "Help";
+    private static final String MENU_ABOUT = "About...";
 
     private JDesktopPane desktop;
 
-    private PowernateSessionMediator config;
+    private PowernateSessionMediator config = null;
 
     private ModelWindow modelWindow;
 
     private JLabel statusLabel;
 
-    private AbstractExecutor executorSelecionado;
+    private AbstractExecutor executor = null;
 
     private boolean busy;
+
+    private ConfigurationWindow configurationWindow;
 
     public MainWindow() {
         super(APP_TITLE);
@@ -68,9 +68,7 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
 
         criarStatusBar();
 
-        criarFormView();
-
-        setStatusText("Clique e 'Arquivo' e 'Importar modelo...' para iniciar.");
+        setStatusText("Click 'File' and 'Scan project...' to begin.");
 
         toFront();
         repaint();
@@ -107,18 +105,10 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
         menu.setMnemonic(KeyEvent.VK_D);
 
         // novo
-        JMenuItem menuItem = new JMenuItem(MENU_NEW);
-        menuItem.setMnemonic(KeyEvent.VK_N);
-        menuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, ActionEvent.CTRL_MASK));
-        menuItem.setActionCommand(MENU_NEW);
-        menuItem.addActionListener(this);
-        menu.add(menuItem);
-
-        // novo
-        menuItem = new JMenuItem(MENU_IMPORT);
-        menuItem.setMnemonic(KeyEvent.VK_I);
-        menuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.ALT_MASK));
-        menuItem.setActionCommand(MENU_IMPORT);
+        JMenuItem menuItem = new JMenuItem(MENU_SCAN);
+        menuItem.setMnemonic(KeyEvent.VK_S);
+        menuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, ActionEvent.ALT_MASK));
+        menuItem.setActionCommand(MENU_SCAN);
         menuItem.addActionListener(this);
         menu.add(menuItem);
 
@@ -181,7 +171,7 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
             salvar();
         }
 
-        if (MENU_IMPORT.equals(command)) {
+        if (MENU_SCAN.equals(command)) {
             importarModelo();
         }
 
@@ -201,29 +191,47 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
 
     private void importarModelo() {
         if (!busy) {
-            config = new PowernateSessionMediator();
-            executorSelecionado = new ImportadorHibernateMetadata();
-            processamentoParalelo();
+            if (configurationWindow == null) {
+                configurationWindow = new ConfigurationWindow(this);
+                desktop.add(configurationWindow);
+            }
+            configurationWindow.setVisible(true);
+            try {
+                configurationWindow.setSelected(true);
+            } catch (PropertyVetoException e) {
+                e.printStackTrace();
+            }
         }
     }
 
     private void compararHomologa() {
         if (!busy) {
-            executorSelecionado = new ExportadorComparacaoBancoHomologacao();
+            executor = new ExportadorComparacaoBancoHomologacao();
             executarCommandSelecionado();
         }
     }
 
     private void gerarGrafo() {
         if (!busy) {
-            executorSelecionado = new GeradorGrafos();
-            processamentoParalelo();
+            executor = new GeradorGrafos();
+            executarCommandSelecionado();
+            if (modelWindow == null) {
+                modelWindow = new ModelWindow(this);
+                desktop.add(modelWindow);
+            }
+            modelWindow.setVisible(true);
+            try {
+                modelWindow.setSelected(true);
+            } catch (java.beans.PropertyVetoException e) {
+                e.printStackTrace();
+            }
+            modelWindow.atualizarView();
         }
     }
 
     private void salvar() {
         if (!busy && config != null) {
-            executorSelecionado = new ExportadorDDLVisual();
+            executor = new ExportadorDDLVisual();
             dialogoExportarDiagrama();
             executarCommandSelecionado();
         }
@@ -236,59 +244,29 @@ public class MainWindow extends JFrame implements ActionListener, JanelaNotifica
         }
 
         int n = JOptionPane.showConfirmDialog(this, //
-                "Deseja exportar a disposicao grafica gerada para o script Powerdesigner?", //
-                "Disposicao dos grafos", //
+                "Export new graph arrangement to Powerdesigner?", //
+                "Graphical PDM model", //
                 JOptionPane.YES_NO_OPTION);
 
         boolean resposta = n == 0;
 
-        if (ExportadorDDLVisual.class.isInstance(executorSelecionado)) {
-            ((ExportadorDDLVisual) executorSelecionado).setExportarGrafos(resposta);
+        if (ExportadorDDLVisual.class.isInstance(executor)) {
+            ((ExportadorDDLVisual) executor).setExportarGrafos(resposta);
         }
-    }
-
-    private void processamentoParalelo() {
-        SwingWorker<Void, Void> thread = new SwingWorker<Void, Void>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                executarCommandSelecionado();
-                return null;
-            }
-        };
-        thread.execute();
     }
 
     private void executarCommandSelecionado() {
         try {
-
-            if (executorSelecionado == null || busy) {
+            if (config == null || executor == null || busy) {
                 return;
             }
-
             busy = true;
-
-            executorSelecionado.executar(this, config);
-
-            modelWindow.atualizarView();
-
+            executor.executar(this, config);
             busy = false;
-
         } catch (Exception e) {
-            synchronized (this) {
-                e.printStackTrace();
-            }
-            setStatusText("Erro no processamento - ver Console");
+            e.printStackTrace();
+            setStatusText("Runtime Error - see Console");
             throw new RuntimeException(e);
-        }
-    }
-
-    protected void criarFormView() {
-        modelWindow = new ModelWindow(this);
-        modelWindow.setVisible(true);
-        desktop.add(modelWindow);
-        try {
-            modelWindow.setSelected(true);
-        } catch (java.beans.PropertyVetoException e) {
         }
     }
 

@@ -29,8 +29,8 @@ public class ExportadorDDLVisual implements AbstractExecutor {
 
         corretorDeScriptDDL.getValentrim().getGeradorVBScript().writeToFile(gerarGrafos);
 
-        janela.notificar("Arquivos salvos em " + System.getProperty("user.dir")
-                + "\\target\\ddl\\ddl.sql e VBScript_PowerDesigner.txt");
+        janela.notificar("Saved files: " + System.getProperty("user.dir") + //
+                "\\target\\ddl\\ddl.sql and VBScript_PowerDesigner.txt");
 
     }
 

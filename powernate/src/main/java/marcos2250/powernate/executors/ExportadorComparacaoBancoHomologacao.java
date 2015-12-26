@@ -32,7 +32,7 @@ public class ExportadorComparacaoBancoHomologacao implements AbstractExecutor {
 
         // corretorDeScriptDDL.getValentrim().getGeradorVBScript().writeToFile(false);
 
-        janela.notificar("Arquivo salvo em " + System.getProperty("user.dir") + "\\target\\ddl\\ddl.sql");
+        janela.notificar("Saved files: " + System.getProperty("user.dir") + "\\target\\ddl\\ddl.sql");
 
     }
 }

@@ -18,7 +18,7 @@
 		<property name="org.hibernate.envers.revision_type_field_name">TAL_ID</property>
 		
 		<!-- Your entities here -->
-		<mapping class="..." />
+		<!-- mapping class="..." -->
 		
 	</session-factory>
 </hibernate-configuration>

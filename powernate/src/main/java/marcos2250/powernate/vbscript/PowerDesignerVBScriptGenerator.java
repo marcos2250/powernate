@@ -432,10 +432,10 @@ public class PowerDesignerVBScriptGenerator {
             }
 
             output.close();
-            LOGGER.info("\nArquivo VBScript/PowerDesigner gerado: " + file.getAbsolutePath());
+            LOGGER.info("\nSaved PDM-VBScript file: " + file.getAbsolutePath());
 
         } catch (IOException e) {
-            LOGGER.error("Erro gerador VBScript", e);
+            LOGGER.error("PDM-VBScript generation error!", e);
         }
 
     }

@@ -9,25 +9,25 @@ public class ImportadorHibernateMetadata implements AbstractExecutor {
 
     public void executar(JanelaNotificavel janela, PowernateSessionMediator config) {
 
-        janela.notificar("Carregando Hibernate...");
+        janela.notificar("Loading Hibernate...");
 
-        config.initialize();
+        //config.initialize();
 
-        janela.notificar("Refinando resultado DDL...");
+        janela.notificar("Refine DDL result...");
 
         RefinadorResultadoDDL refinadorResultadoDDL = new RefinadorResultadoDDL(config);
 
-        janela.notificar("Corrigindo resultado DDL...");
+        janela.notificar("Correcting DDL result...");
 
         CorretorDeScriptDDL corretorDeScriptDDL = new CorretorDeScriptDDL(config, refinadorResultadoDDL);
 
-        janela.notificar("Processando metadados do Hibernate...");
+        janela.notificar("Processing Hibernate Metadata...");
 
         corretorDeScriptDDL.processarHibernateMetadata();
 
         config.setCorretorDeScriptDDL(corretorDeScriptDDL);
 
-        janela.notificar("Metadados do modelo importados com sucesso!");
+        janela.notificar("Model metadata loaded successfully!");
 
     }
 
