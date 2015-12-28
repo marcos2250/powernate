@@ -14,7 +14,14 @@ How it works
 
 See **simpledemoapp** for a demonstration.
 
-1. Build and add *powernate* JAR in your project classpath;
-2. Supply required parameters in files **src/main/resources/powernate.properties** and **hibernate.cfg.xml**;
-3. Execute class **VisualPowernate**'s main method and follow instructions.
+1. Build (run `mvn package`) and add *powernate* JAR in your project dependencies;
+2. Execute class **VisualPowernate**'s main method and follow instructions.
 
+
+## New features in 1.0.1
+- Now supporting Hibernate 4;
+- Added an automatic classpath entity scanner;
+- New in-GUI configurations.
+
+## Tricks and Quirks
+See files **powernate.properties**, **hibernate.cfg.xml** and others inside the Jar! It allows some fine-tuning customization for your projects.
