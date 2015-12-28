@@ -21,10 +21,14 @@ import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.dialect.Dialect;
 import org.reflections.Reflections;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Maps;
 
 public class PowernateSessionMediator {
+
+    public static final Logger LOGGER = LoggerFactory.getLogger(PowernateSessionMediator.class);
 
     protected String defaultUserName;
     protected String defaultUserGroupName;
@@ -60,13 +64,14 @@ public class PowernateSessionMediator {
     private SessionFactory sessionFactory;
     private Configuration hibernateConfiguration;
 
-    public PowernateSessionMediator() {
+    public PowernateSessionMediator() {        
         Properties properties = new Properties();
 
         InputStream file = Thread.currentThread().getContextClassLoader().getResourceAsStream("powernate.properties");
 
         if (file != null) {
             try {
+                LOGGER.info("Reading powernate.properties file...");                
                 properties.load(file);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -98,27 +103,30 @@ public class PowernateSessionMediator {
     }
 
     private void startHibernate() {
-
+        LOGGER.info("Loading SQL dialect...");
         loadDialect();
 
+        LOGGER.info("Starting Hibernate...");
         hibernateConfiguration = new Configuration();
         hibernateConfiguration.configure();
         hibernateConfiguration.setProperty("hibernate.dialect", dialectClassName);
         hibernateConfiguration.setProperty("org.hibernate.envers.revision_field_name", enversControlTableIdColumn);
         hibernateConfiguration.setProperty("org.hibernate.envers.revision_type_field_name", enversTypeControlTableIdColumn);
 
+        LOGGER.info("Searching annotated JPA/Hibernate entities...");
         Set<Class<?>> annotatedClasses = getAnnotatedClasses();
         for (Class<?> annotatedClass : annotatedClasses) {
             hibernateConfiguration.addAnnotatedClass(annotatedClass);
         }
 
+        LOGGER.info("Starting SessionFactory...");
         sessionFactory = hibernateConfiguration.buildSessionFactory();
 
         // For hibernate 4+ compatibility (sessionFactory.openSession)
         try {
             sessionFactory.getClass().getMethod("openSession").invoke(sessionFactory);
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao invocar openSession do Hibernate.SessionFactory!", e);
+            throw new RuntimeException("Error while invoking Hibernate.SessionFactory.openSession()!", e);
         }
     }
 
@@ -130,6 +138,7 @@ public class PowernateSessionMediator {
     }
 
     private void loadModulesList(Properties properties) {
+        LOGGER.info("Searching project modules...");
         modulesList = new ArrayList<ProjectModulesParams>();
 
         int i = 0;
@@ -145,6 +154,7 @@ public class PowernateSessionMediator {
             new ProjectModulesParams(i, split[0], Integer.parseInt(split[1]), Color.getColor(split[1]));
 
             modulesList.add(modulesParams);
+            LOGGER.info("Module found: " + split[0]);
 
             i++;
         }

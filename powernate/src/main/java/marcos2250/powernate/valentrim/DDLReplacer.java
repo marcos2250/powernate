@@ -32,8 +32,8 @@ public class DDLReplacer {
                 sucesso = preencherSubstituicao(i++, props);
             }
         } catch (IOException e) {
-            // Não faz nada
-            e.getMessage();
+            // Nao faz nada
+            e.printStackTrace();
         }
     }
 

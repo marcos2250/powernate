@@ -39,8 +39,8 @@ public class ConfigurationWindow extends JInternalFrame {
     private JTextField txtDefaultETLGroupName;
 
     public ConfigurationWindow(final MainWindow mainWindow) {
-        super("Project Configuration", false, false, false, false);
-        setSize(560, 240);
+        super("Project Configuration", true, false, false, false);
+        setSize(640, 240);
         setLayout(new FlowLayout());
 
         config = new PowernateSessionMediator();

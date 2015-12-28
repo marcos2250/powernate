@@ -13,13 +13,8 @@
 		<property name="hibernate.hbm2ddl.auto">update</property>
 		<property name="show_sql">true</property>
 		<property name="format_sql">true</property>
-		
-		<property name="org.hibernate.envers.revision_field_name">AUD_ID</property>
-		<property name="org.hibernate.envers.revision_type_field_name">TAL_ID</property>
-		
-		<!-- Entities -->
-		<mapping class="marcos2250.simpledemoapp.domain.Person" />
-		<mapping class="marcos2250.simpledemoapp.domain.Project" />
+
+		<!-- Non-annotated entities here -->
 		
 	</session-factory>
 </hibernate-configuration>

@@ -15,8 +15,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.util.DDLUtils;
+import marcos2250.powernate.util.PowernateSessionMediator;
 import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
 
 import org.apache.commons.lang.StringUtils;
@@ -372,44 +372,44 @@ public class Valentrim {
             PrimaryKey pk = table.getPrimaryKey();
 
             // Se tiver pk, troca por instancia de PrimaryKeyWithConstraintName
-            // para que nome da pk seja colocado na definição da table
-            LOGGER.debug(table.getName() + "... tabela tem chave primária " + pk.getName()
-                    + ". Trocando PrimaryKey por PrimaryKeyWithConstraintName.");
+            // para que nome da pk seja colocado na definicao da table
+            LOGGER.debug(table.getName() + "... table has primary key " + pk.getName()
+                    + ". Switching PrimaryKey by PrimaryKeyWithConstraintName.");
 
             pk.setName(getPkName(table));
             table.setPrimaryKey(new PrimaryKeyWithConstraintName(table.getPrimaryKey()));
         } else {
-            LOGGER.warn(table.getName() + "... tabela NÃO tem chave primária! Gerando chave com todas as colunas");
+            LOGGER.warn(table.getName() + "... table does not have any PKs! Generating a key using all columns...");
             PrimaryKey pk = gerarChaveComTodasAsColunas(table);
             table.setPrimaryKey(pk);
         }
     }
 
     private PrimaryKey gerarChaveComTodasAsColunas(Table table) {
-        // Por algum motivo, tabelas criadas automaticamente (por @JoinColumn e @CollectionTable) estão vindo sem PK.
-        // Não sei se é um erro do hibernate ou alguma coisa que fizemos. Para contornar isso, geramos uma chave
+        // Por algum motivo, tabelas criadas automaticamente (por @JoinColumn e @CollectionTable) estao vindo sem PK.
+        // Nao sei se e um erro do hibernate ou alguma coisa que fizemos. Para contornar isso, geramos uma chave
         // incluindo todas as colunas da tabela.
-        // Isso não funciona para algumas tabelas @CollectionTable que têm colunas que não participam da PK. Nesses
+        // Isso nao funciona para algumas tabelas @CollectionTable que tem colunas que neo participam da PK. Nesses
         // casos, convertemos uma UniqueKey especificada manualmente em PK.
         PrimaryKey pkBasica = new PrimaryKey();
         pkBasica.setName(getPkName(table));
         pkBasica.setTable(table);
 
-        // Correção para gerar as primary keys de @CollectionTables a partir de uma UK definida manualmente.
+        // Correcao para gerar as primary keys de @CollectionTables a partir de uma UK definida manualmente.
         // alimentado por quirks.properties
         if (quirks.getCollectionTables().contains(table.getName())) {
             Map<String, UniqueKey> uniqueKeysMap = getUniqueKeysMap(table);
             int numeroUKs = uniqueKeysMap.size();
             if (numeroUKs != 1) {
-                throw new IllegalStateException("Tabela não possui e PK e possui " + numeroUKs
-                        + " UKs, não é possível gerar a PK.");
+                throw new IllegalStateException("Table does not have PK and has " + numeroUKs
+                        + " UKs, is not possible to make the PK.");
             }
 
             UniqueKey uk = uniqueKeysMap.entrySet().iterator().next().getValue();
             pkBasica.addColumns(uk.getColumnIterator());
 
-            // Infelizmente, mesmo removendo a UK ela volta, não consegui descobrir onde. Uma possibilidade é usar o
-            // mecanismo de substituição para removê-la.
+            // Infelizmente, mesmo removendo a UK ela volta, nao consegui descobrir onde. Uma possibilidade e usar o
+            // mecanismo de substituicao para remove-la.
             uniqueKeysMap.remove(uk.getName());
         } else {
             pkBasica.addColumns(table.getColumnIterator());
@@ -444,8 +444,8 @@ public class Valentrim {
                 validarUniqueComColunasNullable(uk, table.getName());
 
             } else {
-                LOGGER.debug(table.getName() + "... Index " + redundantIndex.getName() + " é redundante com UK "
-                        + uk.getName() + "." + " UK será removida e substituída por UniqueIndex "
+                LOGGER.debug(table.getName() + "... Index " + redundantIndex.getName() + " ï¿½ redundante com UK "
+                        + uk.getName() + "." + " UK serï¿½ removida e substituï¿½da por UniqueIndex "
                         + redundantIndex.getName());
                 Map<String, Index> indexesMap = getIndexesMap(table);
                 indexesMap.remove(redundantIndex.getName());
@@ -455,7 +455,7 @@ public class Valentrim {
     }
 
     /**
-     * Checa se já existe algum index de foreign key relativo as mesmas colunas da UK
+     * Checa se ja existe algum index de foreign key relativo as mesmas colunas da UK
      */
     @SuppressWarnings(UNCHECKED)
     private Index getRedundantIndexForUniqueKey(UniqueKey uk, Table table) {
@@ -491,7 +491,7 @@ public class Valentrim {
         while (columnIterator.hasNext()) {
             Column coluna = (Column) columnIterator.next();
             if (coluna.isNullable()) {
-                LOGGER.warn("UK " + uk.getName() + " ( " + tableName + ") contém colunas nullable e será ignorada.");
+                LOGGER.warn("UK " + uk.getName() + " ( " + tableName + ") contï¿½m colunas nullable e serï¿½ ignorada.");
                 return;
             }
         }
@@ -548,8 +548,8 @@ public class Valentrim {
             Column coluna = (Column) iterator.next();
             if (coluna.isUnique()) {
                 throw new IllegalStateException("Coluna " + coluna.getName()
-                        + ": Não utilize unique = true, crie um @UniqueConstraint "
-                        + "no @Table para seguir o padrão das demais tabelas.");
+                        + ": Do not use unique = true, instead, make a @UniqueConstraint "
+                        + "in @Table to follow the default for any table.");
             }
         }
     }

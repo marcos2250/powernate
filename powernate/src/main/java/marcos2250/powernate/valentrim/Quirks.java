@@ -24,8 +24,8 @@ public class Quirks {
             try {
                 properties.load(file);
             } catch (IOException e) {
-                // Não faz nada
-                e.getMessage();
+                // Nao faz nada
+                e.printStackTrace();
             }
         }
 
