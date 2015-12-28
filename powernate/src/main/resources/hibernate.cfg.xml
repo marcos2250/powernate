@@ -13,10 +13,7 @@
 		<property name="hibernate.hbm2ddl.auto">update</property>
 		<property name="show_sql">true</property>
 		<property name="format_sql">true</property>
-		
-		<property name="org.hibernate.envers.revision_field_name">AUD_ID</property>
-		<property name="org.hibernate.envers.revision_type_field_name">TAL_ID</property>
-		
+
 		<!-- Your entities here -->
 		<!-- mapping class="..." -->
 		
