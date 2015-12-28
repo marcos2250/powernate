@@ -16,6 +16,7 @@ import marcos2250.powernate.valentrim.CorretorDeScriptDDL;
 import marcos2250.powernate.valentrim.Permission;
 import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
 
+import org.apache.commons.lang.StringUtils;
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.dialect.Dialect;
@@ -32,8 +33,9 @@ public class PowernateSessionMediator {
     protected String defaultTableSpace;
 
     protected String enversControlTable;
-    protected String enversTypeControlTable;
     protected String enversControlTableIdColumn;
+    protected String enversTypeControlTable;
+    protected String enversTypeControlTableIdColumn;
     protected int enversTableCode = 99;
 
     protected String defaultSchema;
@@ -46,6 +48,7 @@ public class PowernateSessionMediator {
     protected boolean rearrangeGraphEnversTables = false;
     protected boolean generateSQLComments = false;
 
+    private String dialectClassName;
     private Dialect dialect;
 
     private Map<Class<?>, ColumnCommentAppender> typeCommentAppenderMap;
@@ -66,7 +69,7 @@ public class PowernateSessionMediator {
             try {
                 properties.load(file);
             } catch (IOException e) {
-                e.getMessage();
+                e.printStackTrace();
             }
         }
 
@@ -86,19 +89,44 @@ public class PowernateSessionMediator {
         defaultETLGroupName = properties.getProperty("defaultETLGroupName");
         defaultTableSpace = properties.getProperty("defaultTableSpace");
         defaultSchema = properties.getProperty("defaultSchema");
-        loadDialect(properties);
+        dialectClassName = properties.getProperty("dialect");
         scanEntityPackagePrefix = properties.getProperty("scanEntityPackagePrefix");
         enversControlTable = properties.getProperty("enversControlTable");
-        enversTypeControlTable = properties.getProperty("enversTypeControlTable");
         enversControlTableIdColumn = properties.getProperty("enversControlTableIdColumn");
+        enversTypeControlTable = properties.getProperty("enversTypeControlTable");
+        enversTypeControlTableIdColumn = properties.getProperty("enversTypeControlTableIdColumn");
     }
 
-    private void loadDialect(Properties properties) {
-        String dialectProp = properties.getProperty("dialect");
-        if (dialectProp == null) {
-            return;
+    private void startHibernate() {
+
+        loadDialect();
+
+        hibernateConfiguration = new Configuration();
+        hibernateConfiguration.configure();
+        hibernateConfiguration.setProperty("hibernate.dialect", dialect.getClass().getName());
+        hibernateConfiguration.setProperty("org.hibernate.envers.revision_field_name", enversControlTable);
+        hibernateConfiguration.setProperty("org.hibernate.envers.revision_type_field_name", enversTypeControlTableIdColumn);
+
+        Set<Class<?>> annotatedClasses = getAnnotatedClasses();
+        for (Class<?> annotatedClass : annotatedClasses) {
+            hibernateConfiguration.addAnnotatedClass(annotatedClass);
         }
-        setDialect(dialectProp);
+
+        sessionFactory = hibernateConfiguration.buildSessionFactory();
+
+        // For hibernate 4+ compatibility (sessionFactory.openSession)
+        try {
+            sessionFactory.getClass().getMethod("openSession").invoke(sessionFactory);
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao invocar openSession do Hibernate.SessionFactory!", e);
+        }
+    }
+
+    private Set<Class<?>> getAnnotatedClasses() {
+        Reflections reflections = new Reflections(scanEntityPackagePrefix);
+        Set<Class<?>> annotated = reflections.getTypesAnnotatedWith(javax.persistence.Entity.class);
+        annotated.addAll(reflections.getTypesAnnotatedWith(org.hibernate.annotations.Entity.class));
+        return annotated;
     }
 
     private void loadModulesList(Properties properties) {
@@ -120,34 +148,6 @@ public class PowernateSessionMediator {
 
             i++;
         }
-    }
-
-    private void startHibernate() {
-
-        hibernateConfiguration = new Configuration();
-        hibernateConfiguration.configure();
-        hibernateConfiguration.setProperty("hibernate.dialect", dialect.getClass().getName());
-
-        Set<Class<?>> annotatedClasses = getAnnotatedClasses();
-        for (Class<?> annotatedClass : annotatedClasses) {
-            hibernateConfiguration.addAnnotatedClass(annotatedClass);
-        }
-
-        sessionFactory = hibernateConfiguration.buildSessionFactory();
-
-        // Invoke sessionFactory.openSession() by reflection (for Hibernate4+ compatibility)
-        try {
-            sessionFactory.getClass().getMethod("openSession").invoke(sessionFactory);
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao invocar openSession do Hibernate.SessionFactory!", e);
-        }
-    }
-
-    private Set<Class<?>> getAnnotatedClasses() {
-        Reflections reflections = new Reflections(scanEntityPackagePrefix);
-        Set<Class<?>> annotated = reflections.getTypesAnnotatedWith(javax.persistence.Entity.class);
-        annotated.addAll(reflections.getTypesAnnotatedWith(org.hibernate.annotations.Entity.class));
-        return annotated;
     }
 
     public int getClassCode(String className) {
@@ -189,18 +189,11 @@ public class PowernateSessionMediator {
         return dialect;
     }
 
-    public void setDialect(String dialectProp) {
-        Dialect d = null;
-        try {
-            Class<?> forName = Class.forName(dialectProp.trim());
-            if (forName == null) {
-                this.dialect = null;
-            }
-            d = (Dialect) forName.newInstance();
-        } catch (Exception e) {
-            e.printStackTrace();
+    public void loadDialect() {
+        if (StringUtils.isEmpty(dialectClassName)) {
+            return;
         }
-        this.dialect = d;
+        this.dialect = ClassloaderUtil.getInstanceFromClasspath(dialectClassName.trim());
     }
 
     public Map<Class<?>, ColumnCommentAppender> getColumnTypeToCommentAppender() {
@@ -208,6 +201,25 @@ public class PowernateSessionMediator {
             typeCommentAppenderMap = createColumnTypeToCommentAppender();
         }
         return typeCommentAppenderMap;
+    }
+
+    public PowerDesignerVBScriptGenerator getModeler() {
+        if (corretorDeScriptDDL == null || corretorDeScriptDDL.getValentrim() == null) {
+            return null;
+        }
+        return corretorDeScriptDDL.getValentrim().getGeradorVBScript();
+    }
+
+    protected Map<Class<?>, ColumnCommentAppender> createColumnTypeToCommentAppender() {
+        Map<Class<?>, ColumnCommentAppender> columnTypeToCommentAppender = Maps.newHashMap();
+        EnumCommentAppender enumCommentAppender = new EnumCommentAppender();
+        columnTypeToCommentAppender.put(Enum.class, enumCommentAppender);
+        return columnTypeToCommentAppender;
+    }
+
+    @SuppressWarnings("deprecation")
+    public Connection getConnection() {
+        return sessionFactory.getCurrentSession().connection();
     }
 
     public String getCreateSequenceString(String sequenceName) {
@@ -258,6 +270,10 @@ public class PowernateSessionMediator {
         return enversTypeControlTable;
     }
 
+    public String getEnversTypeControlTableIdColumn() {
+        return enversTypeControlTableIdColumn;
+    }
+
     public List<ProjectModulesParams> getModulesList() {
         return modulesList;
     }
@@ -286,26 +302,8 @@ public class PowernateSessionMediator {
         return changedGraph;
     }
 
-    public PowerDesignerVBScriptGenerator getModeler() {
-        if (corretorDeScriptDDL == null || corretorDeScriptDDL.getValentrim() == null) {
-            return null;
-        }
-        return corretorDeScriptDDL.getValentrim().getGeradorVBScript();
-    }
-
     public void setCorretorDeScriptDDL(CorretorDeScriptDDL corretorDeScriptDDL) {
         this.corretorDeScriptDDL = corretorDeScriptDDL;
-    }
-
-    protected Map<Class<?>, ColumnCommentAppender> createColumnTypeToCommentAppender() {
-
-        Map<Class<?>, ColumnCommentAppender> columnTypeToCommentAppender = Maps.newHashMap();
-
-        EnumCommentAppender enumCommentAppender = new EnumCommentAppender();
-
-        columnTypeToCommentAppender.put(Enum.class, enumCommentAppender);
-
-        return columnTypeToCommentAppender;
     }
 
     public void setGeneratedGraphs(boolean changedGraph) {
@@ -314,11 +312,6 @@ public class PowernateSessionMediator {
 
     public Configuration getConfiguration() {
         return hibernateConfiguration;
-    }
-
-    @SuppressWarnings("deprecation")
-    public Connection getConnection() {
-        return sessionFactory.getCurrentSession().connection();
     }
 
     public String getScanEntityPackagePrefix() {
@@ -335,6 +328,42 @@ public class PowernateSessionMediator {
 
     public void setTablespace(String text) {
         this.defaultTableSpace = text;
+    }
+
+    public void setEnversControlTable(String text) {
+        this.enversControlTable = text;
+    }
+
+    public void setEnversTypeControlTable(String text) {
+        this.enversTypeControlTable = text;
+    }
+
+    public void setEnversControlTableIdColumn(String text) {
+        this.enversControlTableIdColumn = text;
+    }
+
+    public void setDefaultETLGroupName(String defaultETLGroupName) {
+        this.defaultETLGroupName = defaultETLGroupName;
+    }
+
+    public void setDefaultUserGroupName(String defaultUserGroupName) {
+        this.defaultUserGroupName = defaultUserGroupName;
+    }
+
+    public void setDefaultUserName(String defaultUserName) {
+        this.defaultUserName = defaultUserName;
+    }
+
+    public void setDefaultUserGroupNameReadOnly(String defaultUserGroupNameReadOnly) {
+        this.defaultUserGroupNameReadOnly = defaultUserGroupNameReadOnly;
+    }
+
+    public void setEnversTypeControlTableIdColumn(String enversTypeControlTableIdColumn) {
+        this.enversTypeControlTableIdColumn = enversTypeControlTableIdColumn;
+    }
+
+    public void setDialectClassName(String dialectClassName) {
+        this.dialectClassName = dialectClassName;
     }
 
 }
