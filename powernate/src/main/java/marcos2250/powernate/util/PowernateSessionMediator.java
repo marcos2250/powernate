@@ -134,7 +134,13 @@ public class PowernateSessionMediator {
         }
 
         sessionFactory = hibernateConfiguration.buildSessionFactory();
-        sessionFactory.openSession();
+
+        // Invoke sessionFactory.openSession() by reflection (for Hibernate4+ compatibility)
+        try {
+            sessionFactory.getClass().getMethod("openSession").invoke(sessionFactory);
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao invocar openSession do Hibernate.SessionFactory!", e);
+        }
     }
 
     private Set<Class<?>> getAnnotatedClasses() {
