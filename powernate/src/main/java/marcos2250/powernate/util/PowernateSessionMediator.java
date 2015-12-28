@@ -103,8 +103,8 @@ public class PowernateSessionMediator {
 
         hibernateConfiguration = new Configuration();
         hibernateConfiguration.configure();
-        hibernateConfiguration.setProperty("hibernate.dialect", dialect.getClass().getName());
-        hibernateConfiguration.setProperty("org.hibernate.envers.revision_field_name", enversControlTable);
+        hibernateConfiguration.setProperty("hibernate.dialect", dialectClassName);
+        hibernateConfiguration.setProperty("org.hibernate.envers.revision_field_name", enversControlTableIdColumn);
         hibernateConfiguration.setProperty("org.hibernate.envers.revision_type_field_name", enversTypeControlTableIdColumn);
 
         Set<Class<?>> annotatedClasses = getAnnotatedClasses();
