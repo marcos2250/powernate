@@ -40,11 +40,12 @@ public class ConfigurationWindow extends JInternalFrame {
 
     public ConfigurationWindow(final MainWindow mainWindow) {
         super("Project Configuration", true, false, false, false);
-        setSize(640, 240);
+        setSize(712, 240);
         setLayout(new FlowLayout());
 
         config = new PowernateSessionMediator();
         mainWindow.setConfig(config);
+        config.loadDialect();
 
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Database", null, createDatabaseTab(), "Basic DB setup");

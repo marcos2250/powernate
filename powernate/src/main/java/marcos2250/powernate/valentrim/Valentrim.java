@@ -1,7 +1,6 @@
 package marcos2250.powernate.valentrim;
 
 import static com.google.common.collect.Lists.newArrayList;
-import static com.google.common.collect.Maps.uniqueIndex;
 import static com.google.common.collect.Sets.difference;
 import static com.google.common.collect.Sets.newHashSet;
 
@@ -12,14 +11,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import marcos2250.powernate.util.DDLUtils;
-import marcos2250.powernate.util.PowernateSessionMediator;
-import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
-
-import org.apache.commons.lang.StringUtils;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.mapping.Column;
 import org.hibernate.mapping.ForeignKey;
@@ -35,29 +27,22 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Function;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
 
+import marcos2250.powernate.util.DDLUtils;
+import marcos2250.powernate.util.PowernateSessionMediator;
+import marcos2250.powernate.vbscript.PowerDesignerVBScriptGenerator;
+
 //CHECKSTYLE:OFF devido Fan-out excessivo
-@SuppressWarnings({"PMD.ExcessiveImports", "PMD.CouplingBetweenObjects", "PMD.FanOut"})
+@SuppressWarnings({ "PMD.ExcessiveImports", "PMD.CouplingBetweenObjects", "PMD.FanOut" })
 public class Valentrim {
     // CHECKSTYLE:ON
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Valentrim.class);
-
     private static final String UNCHECKED = "unchecked";
-    private static final String UNDERSCORE = "_";
-
-    private static final String FK = "FK";
-    private static final String PREFIXO_UK = "UK_";
-    private static final int PREFIX_LENGTH = 3;
-    private static final int COLUMN_NAME_MAX_LENGTH = 32;
-    private static final int TABLE_NAME_MAX_LENGTH = 40;
-    private static final int COLUMN_NAME_LENGTH_FOR_UNIQUEKEY_NAME = 3 * PREFIX_LENGTH;
-    private static final int UK_NAME_MAX_LENGTH = 18;
 
     private Set<Table> tables;
     private Multimap<Table, PersistentClass> tableToClass;
@@ -68,28 +53,27 @@ public class Valentrim {
     private Multimap<Table, Index> tableToIndexes;
 
     private PowerDesignerVBScriptGenerator geradorVBScript;
-
     private PowernateSessionMediator config;
-
     private Quirks quirks;
+    private ValentimNamingConvention namingConvention;
 
     public Valentrim(Configuration hibernateConfiguration, PowernateSessionMediator config) {
         this.hibernateConfiguration = hibernateConfiguration;
+        this.namingConvention = new ValentimNamingConvention();
         this.config = config;
     }
 
     public void process() {
         init();
-        checkTablePrefixesUniqueness();
+        namingConvention.generalValidation(tables);
 
         geradorVBScript = new PowerDesignerVBScriptGenerator(config, quirks, tableToClass, columnAliasToProperty);
-
         geradorVBScript.doPreProcessings(tables);
 
         for (Table table : tables) {
             String nomeTabela = table.getName();
             LOGGER.info("Processando " + nomeTabela);
-            validateTableName(table);
+            namingConvention.validateTableName(table, config);
             processSequences(table);
             processPrimaryKey(table);
             processForeignKeys(table);
@@ -144,8 +128,7 @@ public class Valentrim {
             tableToProperties.putAll(persistentClass.getTable(),
                     Sets.newHashSet(persistentClass.getIdentifierProperty()));
             tableToProperties.putAll(persistentClass.getTable(),
-
-            Sets.<Property> newHashSet(persistentClass.getDeclaredPropertyIterator()));
+                    Sets.<Property> newHashSet(persistentClass.getDeclaredPropertyIterator()));
         }
 
         columnAliasToProperty = HashMultimap.create();
@@ -162,52 +145,6 @@ public class Valentrim {
 
     private String getColumnUniqueAlias(Table table, Column column) {
         return column.getAlias(config.getDialect(), table);
-    }
-
-    private void checkTablePrefixesUniqueness() {
-        LOGGER.debug("Checando unicidade dos prefixos das tabelas...");
-        try {
-            uniqueIndex(tables, new Function<Table, String>() {
-                public String apply(Table input) {
-                    return tableNamePrefix(input);
-                }
-            });
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Erro ao checar unicidade de siglas de tabelas! ", e);
-        }
-        LOGGER.debug("Unicidade dos prefixos das tabelas OK!!");
-    }
-
-    private void validateTableName(Table table) {
-
-        String name = table.getName();
-
-        String prefix = (String) name.subSequence(0, PREFIX_LENGTH + 1);
-
-        Pattern patt = Pattern.compile("^[A-Z]{" + PREFIX_LENGTH + "}_$");
-        Matcher m = patt.matcher(prefix);
-
-        List<String> violations = Lists.newArrayList();
-
-        char tableNameFirstLetter = name.charAt(PREFIX_LENGTH + 1);
-        char prefixFistLetter = prefix.charAt(0);
-
-        if (!DDLUtils.isEnvers(table, config) && prefixFistLetter != tableNameFirstLetter) {
-            violations.add("Primeira letra do prefixo '" + prefixFistLetter
-                    + "' nao bate com primeira letra do nome da tabela '" + tableNameFirstLetter + "' .");
-        }
-
-        if (!m.matches()) {
-            violations.add("Prefixo nao e composto de tres letras maiusculas!");
-        }
-
-        if (name.length() > TABLE_NAME_MAX_LENGTH) {
-            violations.add("Tamanho do nome da tabela " + name + " maior que o limite de " + TABLE_NAME_MAX_LENGTH);
-        }
-
-        if (!violations.isEmpty()) {
-            LOGGER.error("Nome de tabela invalido " + name + "  : \n" + StringUtils.join(violations, "  \n"));
-        }
     }
 
     private void processSequences(Table table) {
@@ -227,24 +164,25 @@ public class Valentrim {
                 // CHECKSTYLE:OFF
                 if (numberOfFks == 1) {
                     String originalName = foreignKey.getName();
-                    foreignKey.setName("IR" + tableNamePrefix(refTable) + tableNamePrefix(table));
-                    LOGGER.debug(table.getName() + "... Alterando nome de FK: " + originalName + " -> "
-                            + foreignKey.getName());
+                    foreignKey.setName(namingConvention.makeIRName(table, refTable));
+                    LOGGER.debug(
+                            table.getName() + "... Changed FK name: " + originalName + " -> " + foreignKey.getName());
                 } else {
-                    // Quando existe mais de uma FK referenciando a mesma refTable, o nome devera ser previamente
-                    // definido. Ele nao sera gerado! Nao e seguro gerar o nome da FK nesse caso, pois nao haveria como
-                    // definir um nome que independesse dos nomes das outras fks.
-                    LOGGER.debug(table.getName() + "... FKs referenciando mesma tabela: " + foreignKey.getName()
-                            + " . Nome da FK NAO foi alterado!");
-                    validateNameForMultipleForeignKey(table, refTable, numberOfFks, foreignKey);
+                    // Quando existe mais de uma FK referenciando a mesma
+                    // refTable, o nome devera ser previamente
+                    // definido. Ele nao sera gerado! Nao e seguro gerar o nome
+                    // da FK nesse caso, pois nao haveria como
+                    // definir um nome que independesse dos nomes das outras
+                    // fks.
+                    LOGGER.debug(table.getName() + "... FKs referring same table: " + foreignKey.getName()
+                            + " . FK name was NOT changed!");
+                    namingConvention.validateNameForMultipleForeignKey(table, refTable, numberOfFks, foreignKey);
                 }
                 // CHECKSTYLE:ON
                 validateForeignKeyNameUniqueness(foreignKey);
 
                 if (isForeignKeyReferenceToSingleColumnPrimaryKey(foreignKey)) {
-                    LOGGER.debug(table.getName()
-                            + "... ignorando foreign key que nao e referencia a chave primaria simples!");
-
+                    LOGGER.debug(table.getName() + "... ignoring foreign key not referring a simple primary key!");
                     continue;
                 }
 
@@ -270,19 +208,18 @@ public class Valentrim {
         Set<Column> pkColumns = getPkColumns(table);
 
         // Somente cria index para colunas de FKs que nao sao PKs ou quando PK e
-        // composta
-        // pkColumns.size() > 1 => captura jointables (why?)
+        // composta pkColumns.size() > 1 => captura jointables (why?)
         if (!pkColumns.contains(column) || (pkColumns.size() > 1)) {
-            String inComplianceFKName = getForeignKeyIndexName(table, refTable, foreignKey);
+            String inComplianceFKName = namingConvention.getForeignKeyIndexName(table, refTable, foreignKey);
             Index index = table.getOrCreateIndex(inComplianceFKName);
             index.addColumn(column);
-            LOGGER.debug(table.getName() + "... Criando index " + index.getName() + " da FK " + foreignKey.getName());
+            LOGGER.debug(table.getName() + "... Creating index " + index.getName() + " for FK " + foreignKey.getName());
 
             tableToIndexes.put(table, index);
 
-            String irComment = "Integridade referencial entre a tabela mae " + refTable.getName() + "  e a coluna "
-                    + column.getName() + " da tabela filha " + table.getName();
-            String fkComment = "Chave estrangeira entre a tabela mae " + refTable.getName() + " e a tabela filha "
+            String irComment = "Referencial integrity between strong table " + refTable.getName() + "  and column "
+                    + column.getName() + " of weak table " + table.getName();
+            String fkComment = "Foreign key between strong table " + refTable.getName() + " and weak table "
                     + table.getName();
 
             geradorVBScript.processRelation(refTable.getName(), table.getName(), foreignKey.getName(),
@@ -291,7 +228,7 @@ public class Valentrim {
             return;
         }
 
-        LOGGER.debug(table.getName() + "... FK " + foreignKey.getName() + " nao teve nenhum index criado.");
+        LOGGER.debug(table.getName() + "... FK " + foreignKey.getName() + " doesn't have any index created.");
     }
 
     @SuppressWarnings(UNCHECKED)
@@ -303,67 +240,17 @@ public class Valentrim {
         return pkColumns;
     }
 
-    private String getForeignKeyIndexName(Table table, Table refTable, ForeignKey foreignKey) {
-        // IRABCXYZ => FKXYZABC
-        // IRABCXY2 => FKXYZAB2
-        // IRABCX12 => FKXYZA12
-        String fkName = foreignKey.getName();
-
-        String lastChar = String.valueOf(fkName.charAt(fkName.length() - 1));
-        String penultimateChar = String.valueOf(fkName.charAt(fkName.length() - 2));
-
-        if (StringUtils.isNumeric(lastChar)) {
-            if (StringUtils.isNumeric(penultimateChar)) {
-                return FK + tableNamePrefix(table) + tableNamePrefix(refTable).substring(0, PREFIX_LENGTH - 2)
-                        + penultimateChar + lastChar;
-            } else {
-                return FK + tableNamePrefix(table) + tableNamePrefix(refTable).substring(0, PREFIX_LENGTH - 1)
-                        + lastChar;
-            }
-        }
-        return FK + tableNamePrefix(table) + tableNamePrefix(refTable);
-    }
-
     private boolean isForeignKeyReferenceToSingleColumnPrimaryKey(ForeignKey foreignKey) {
         return (!foreignKey.isReferenceToPrimaryKey() || (foreignKey.getColumnSpan() > 1));
     }
 
     private void validateForeignKeyNameUniqueness(ForeignKey foreignKey) {
         if (fkNameToForeignKey.containsKey(foreignKey.getName())) {
-            throw new IllegalArgumentException(" Foreign key '" + foreignKey.getName() + "' referente a coluna "
-                    + foreignKey.getColumn(0).getName() + " tem nome duplicado com foreign key referente a coluna "
+            throw new IllegalArgumentException(" Foreign key '" + foreignKey.getName() + "' referring column "
+                    + foreignKey.getColumn(0).getName() + " has duplicated foreign key for column "
                     + fkNameToForeignKey.get(foreignKey.getName()).getColumn(0).getName());
         } else {
             fkNameToForeignKey.put(foreignKey.getName(), foreignKey);
-        }
-    }
-
-    private void validateNameForMultipleForeignKey(Table table, Table refTable, int numberOfFks, ForeignKey foreignKey) {
-        String fkName = foreignKey.getName();
-        String refTableName = tableNamePrefix(refTable);
-
-        char lastCharOfPrefix = tableNamePrefix(table).charAt(PREFIX_LENGTH - 1);
-        char penultimateCharOfPrefix = tableNamePrefix(table).charAt(PREFIX_LENGTH - 2);
-
-        String format;
-
-        if (numberOfFks < 10) {
-            // "IRAAABBB" -> "IRAAABB9"
-            CharSequence tableName = tableNamePrefix(table).subSequence(0, PREFIX_LENGTH - 1);
-            format = "IR" + refTableName + tableName + '[' + lastCharOfPrefix + "|1-" + (numberOfFks + 1) + ']';
-        } else {
-            // "IRAAABBB" -> "IRAAAB99"
-            CharSequence tableName = tableNamePrefix(table).subSequence(0, PREFIX_LENGTH - 2);
-            format = "IR" + refTableName + tableName + '[' + penultimateCharOfPrefix + "\\d][" + lastCharOfPrefix
-                    + "\\d]";
-        }
-
-        Pattern patt = Pattern.compile("^" + format + "$");
-        Matcher m = patt.matcher(fkName);
-
-        if (!m.matches()) {
-            LOGGER.error("Nome de foreign key da tabela " + table.getName() + " em formato invalido: '" + fkName
-                    + "'. Formato esperado '" + format + "' ");
         }
     }
 
@@ -376,7 +263,7 @@ public class Valentrim {
             LOGGER.debug(table.getName() + "... table has primary key " + pk.getName()
                     + ". Switching PrimaryKey by PrimaryKeyWithConstraintName.");
 
-            pk.setName(getPkName(table));
+            pk.setName(namingConvention.getPkName(table));
             table.setPrimaryKey(new PrimaryKeyWithConstraintName(table.getPrimaryKey()));
         } else {
             LOGGER.warn(table.getName() + "... table does not have any PKs! Generating a key using all columns...");
@@ -386,29 +273,34 @@ public class Valentrim {
     }
 
     private PrimaryKey gerarChaveComTodasAsColunas(Table table) {
-        // Por algum motivo, tabelas criadas automaticamente (por @JoinColumn e @CollectionTable) estao vindo sem PK.
-        // Nao sei se e um erro do hibernate ou alguma coisa que fizemos. Para contornar isso, geramos uma chave
+        // Por algum motivo, tabelas criadas automaticamente (por @JoinColumn e
+        // @CollectionTable) estao vindo sem PK.
+        // Nao sei se e um erro do hibernate ou alguma coisa que fizemos. Para
+        // contornar isso, geramos uma chave
         // incluindo todas as colunas da tabela.
-        // Isso nao funciona para algumas tabelas @CollectionTable que tem colunas que neo participam da PK. Nesses
+        // Isso nao funciona para algumas tabelas @CollectionTable que tem
+        // colunas que neo participam da PK. Nesses
         // casos, convertemos uma UniqueKey especificada manualmente em PK.
         PrimaryKey pkBasica = new PrimaryKey();
-        pkBasica.setName(getPkName(table));
+        pkBasica.setName(namingConvention.getPkName(table));
         pkBasica.setTable(table);
 
-        // Correcao para gerar as primary keys de @CollectionTables a partir de uma UK definida manualmente.
+        // Correcao para gerar as primary keys de @CollectionTables a partir de
+        // uma UK definida manualmente.
         // alimentado por quirks.properties
         if (quirks.getCollectionTables().contains(table.getName())) {
             Map<String, UniqueKey> uniqueKeysMap = getUniqueKeysMap(table);
             int numeroUKs = uniqueKeysMap.size();
             if (numeroUKs != 1) {
-                throw new IllegalStateException("Table does not have PK and has " + numeroUKs
-                        + " UKs, is not possible to make the PK.");
+                throw new IllegalStateException(
+                        "Table does not have PK and has " + numeroUKs + " UKs, is not possible to make the PK.");
             }
 
             UniqueKey uk = uniqueKeysMap.entrySet().iterator().next().getValue();
             pkBasica.addColumns(uk.getColumnIterator());
 
-            // Infelizmente, mesmo removendo a UK ela volta, nao consegui descobrir onde. Uma possibilidade e usar o
+            // Infelizmente, mesmo removendo a UK ela volta, nao consegui
+            // descobrir onde. Uma possibilidade e usar o
             // mecanismo de substituicao para remove-la.
             uniqueKeysMap.remove(uk.getName());
         } else {
@@ -416,10 +308,6 @@ public class Valentrim {
         }
 
         return new PrimaryKeyWithConstraintName(pkBasica);
-    }
-
-    private String getPkName(Table table) {
-        return "PK_" + tableNamePrefix(table);
     }
 
     @SuppressWarnings(UNCHECKED)
@@ -432,20 +320,17 @@ public class Valentrim {
 
             Index redundantIndex = getRedundantIndexForUniqueKey(uk, table);
             if (redundantIndex == null) {
-                if (!nomeEspecificadoManualmente(uk.getName(), table)) {
-                    String ukName = makeUKName(table, uk);
-                    uk.setName(ukName.substring(0, Math.min(UK_NAME_MAX_LENGTH, ukName.length())));
-                }
+                uk.setName(namingConvention.makeUKName(table, uk));
 
-                LOGGER.debug(table.getName() + "... Substituindo UniqueKey por UniqueKeyWithConstraintName para UK "
+                LOGGER.debug(table.getName() + "... Replacing UniqueKey by UniqueKeyWithConstraintName for the UK "
                         + uk.getName());
                 uniqueKeys.put(uk.getName(), new UniqueKeyWithConstraintName(uk));
 
                 validarUniqueComColunasNullable(uk, table.getName());
 
             } else {
-                LOGGER.debug(table.getName() + "... Index " + redundantIndex.getName() + " � redundante com UK "
-                        + uk.getName() + "." + " UK ser� removida e substitu�da por UniqueIndex "
+                LOGGER.debug(table.getName() + "... Index " + redundantIndex.getName() + " is redundant to UK "
+                        + uk.getName() + "." + " UK will be removed and replaced by UniqueIndex "
                         + redundantIndex.getName());
                 Map<String, Index> indexesMap = getIndexesMap(table);
                 indexesMap.remove(redundantIndex.getName());
@@ -455,7 +340,8 @@ public class Valentrim {
     }
 
     /**
-     * Checa se ja existe algum index de foreign key relativo as mesmas colunas da UK
+     * Checa se ja existe algum index de foreign key relativo as mesmas colunas
+     * da UK
      */
     @SuppressWarnings(UNCHECKED)
     private Index getRedundantIndexForUniqueKey(UniqueKey uk, Table table) {
@@ -469,29 +355,13 @@ public class Valentrim {
         return null;
     }
 
-    private boolean nomeEspecificadoManualmente(String name, Table table) {
-        return name.startsWith(PREFIXO_UK + tableNamePrefix(table));
-    }
-
-    @SuppressWarnings(UNCHECKED)
-    private String makeUKName(Table table, UniqueKey uk) {
-        Set<Column> columns = newHashSet(uk.columnIterator());
-        StringBuilder sb = new StringBuilder(PREFIXO_UK).append(tableNamePrefix(table));
-        for (Column column : columns) {
-            sb.append(UNDERSCORE);
-            String uniqueKeyNamePartForColumn = (String) column.getName().subSequence(0,
-                    Math.min(PREFIX_LENGTH + 1 + COLUMN_NAME_LENGTH_FOR_UNIQUEKEY_NAME, column.getName().length()));
-            sb.append(uniqueKeyNamePartForColumn);
-        }
-        return sb.toString();
-    }
-
     private void validarUniqueComColunasNullable(UniqueKey uk, String tableName) {
         Iterator<?> columnIterator = uk.getColumnIterator();
         while (columnIterator.hasNext()) {
             Column coluna = (Column) columnIterator.next();
             if (coluna.isNullable()) {
-                LOGGER.warn("UK " + uk.getName() + " ( " + tableName + ") cont�m colunas nullable e ser� ignorada.");
+                LOGGER.warn(
+                        "UK " + uk.getName() + " ( " + tableName + ") contains nullable columns and shall be ignored.");
                 return;
             }
         }
@@ -547,9 +417,9 @@ public class Valentrim {
         while (iterator.hasNext()) {
             Column coluna = (Column) iterator.next();
             if (coluna.isUnique()) {
-                throw new IllegalStateException("Coluna " + coluna.getName()
-                        + ": Do not use unique = true, instead, make a @UniqueConstraint "
-                        + "in @Table to follow the default for any table.");
+                throw new IllegalStateException(
+                        "Column " + coluna.getName() + ": Do not use unique = true, instead, make a @UniqueConstraint "
+                                + "in @Table to follow the default for any table.");
             }
         }
     }
@@ -563,7 +433,7 @@ public class Valentrim {
         // valida nomes de colunas que nao sao FKs
         Set<Column> notFkColumns = difference(newHashSet(table.getColumnIterator()), fkColumns);
         for (Column column : notFkColumns) {
-            validateColumnName(table, column, validarPrefixoColuna);
+            namingConvention.validateColumnName(table, column, validarPrefixoColuna);
         }
 
     }
@@ -581,37 +451,6 @@ public class Valentrim {
 
     private void processComments(Table table) {
         geradorVBScript.processTableProperties(table);
-    }
-
-    private void validateColumnName(Table table, Column column, boolean validarPrefixoColuna) {
-        String columnName = column.getName();
-        Set<String> violations = Sets.newHashSet();
-
-        if (columnName.length() < 5) {
-            LOGGER.error("Nome da coluna muito curto! - " + columnName);
-            return;
-        }
-
-        String columnPrefix = (String) columnName.subSequence(0, PREFIX_LENGTH);
-
-        if (validarPrefixoColuna && !columnPrefix.equals(tableNamePrefix(table))) {
-            violations.add("Prefixo da coluna " + columnName + " '" + columnPrefix + "' deveria ser '"
-                    + tableNamePrefix(table) + "'");
-        }
-
-        if (columnName.length() > COLUMN_NAME_MAX_LENGTH) {
-            violations.add("Tamanho do nome da coluna " + columnName + "(" + columnName.length()
-                    + ") excede tamanho maximo de (" + COLUMN_NAME_MAX_LENGTH + ")");
-        }
-
-        if (!violations.isEmpty()) {
-            LOGGER.error(table.getName() + "... Nome de coluna invalido " + columnName + " : \n"
-                    + StringUtils.join(violations, "\n"));
-        }
-    }
-
-    protected static String tableNamePrefix(Table input) {
-        return (String) input.getName().subSequence(0, PREFIX_LENGTH);
     }
 
     public PowerDesignerVBScriptGenerator getGeradorVBScript() {
